@@ -5,6 +5,7 @@ export interface PdfMetadata {
   author?: string;
   pageCount?: number;
   createdDate?: string;
+  [key: string]: unknown;
 }
 
 export function extractPdf(item: IngestItem): PdfMetadata {

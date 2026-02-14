@@ -9,6 +9,7 @@ export interface EmailMetadata {
   messageId?: string;
   inReplyTo?: string;
   references?: string[];
+  [key: string]: unknown;
 }
 
 export function extractEmail(item: IngestItem): EmailMetadata {

@@ -3,6 +3,7 @@ import type { IngestItem } from "../doctype.js";
 export interface ImageMetadata {
   mimeType?: string;
   dimensions?: { width: number; height: number };
+  [key: string]: unknown;
 }
 
 export function extractImage(item: IngestItem): ImageMetadata {

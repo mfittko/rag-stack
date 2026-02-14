@@ -6,6 +6,7 @@ export interface CodeMetadata {
   classes?: string[];
   imports?: string[];
   exports?: string[];
+  [key: string]: unknown;
 }
 
 const extToLang: Record<string, string> = {

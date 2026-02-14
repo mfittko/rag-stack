@@ -5,6 +5,7 @@ export interface MeetingMetadata {
   duration?: string;
   platform?: string;
   participants?: string[];
+  [key: string]: unknown;
 }
 
 export function extractMeeting(item: IngestItem): MeetingMetadata {

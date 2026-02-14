@@ -5,6 +5,7 @@ export interface ArticleMetadata {
   author?: string;
   publishDate?: string;
   url?: string;
+  [key: string]: unknown;
 }
 
 export function extractArticle(item: IngestItem): ArticleMetadata {

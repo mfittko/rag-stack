@@ -5,6 +5,7 @@ export interface SlackMetadata {
   threadId?: string;
   participants?: string[];
   timestamp?: string;
+  [key: string]: unknown;
 }
 
 export function extractSlack(item: IngestItem): SlackMetadata {

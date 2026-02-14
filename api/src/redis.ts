@@ -40,7 +40,7 @@ async function getRedisClient() {
     
     // Store connect promise to prevent race conditions
     if (!connectPromise) {
-      connectPromise = redisClient.connect();
+      connectPromise = redisClient.connect().then(() => {});
     }
   }
 
