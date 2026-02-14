@@ -461,7 +461,6 @@ async function main() {
     .option("--maxFiles <n>", "Maximum files to process", "4000")
     .option("--maxBytes <n>", "Maximum file size in bytes", "500000")
     .option("--keep", "Keep the cloned temp directory", false)
-    .option("--enrich", "Enable enrichment (default: true)", true)
     .option("--no-enrich", "Disable enrichment")
     .option("--doc-type <type>", "Override document type detection")
     .action(cmdIndex);
@@ -487,7 +486,6 @@ async function main() {
     .option("--api <url>", "RAG API URL", "http://localhost:8080")
     .option("--collection <name>", "Qdrant collection name", "docs")
     .option("--token <token>", "Bearer token for auth")
-    .option("--enrich", "Enable enrichment (default: true)", true)
     .option("--no-enrich", "Disable enrichment")
     .option("--doc-type <type>", "Override document type detection")
     .action(cmdIngest);
