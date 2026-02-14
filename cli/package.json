@@ -1,5 +1,5 @@
 {
-  "name": "@your-scope/rag-indexer",
+  "name": "rag-index",
   "version": "1.0.0",
   "type": "module",
   "bin": {
