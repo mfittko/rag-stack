@@ -181,7 +181,7 @@ describe("query service", () => {
             score: 0.9,
             payload: {
               text: "test",
-              tier2Meta: { entities: [{ text: "AuthService" }] },
+              tier2: { entities: [{ text: "AuthService" }] },
             },
           },
         ]),
@@ -206,7 +206,7 @@ describe("query service", () => {
             score: 0.9,
             payload: {
               text: "test",
-              tier2Meta: { entities: [{ text: "AuthService" }] },
+              tier2: { entities: [{ text: "AuthService" }] },
             },
           },
         ]),
@@ -232,7 +232,7 @@ describe("query service", () => {
             score: 0.9,
             payload: {
               text: "test",
-              tier2Meta: { entities: [{ text: "AuthService" }, { text: "UserService" }] },
+              tier2: { entities: [{ text: "AuthService" }, { text: "UserService" }] },
             },
           },
         ]),
@@ -262,7 +262,7 @@ describe("query service", () => {
             score: 0.9,
             payload: {
               text: "test",
-              tier3Meta: { entities: [{ name: "API" }, { name: "Cache" }] },
+              tier3: { entities: [{ name: "API" }, { name: "Cache" }] },
             },
           },
         ]),
@@ -289,8 +289,8 @@ describe("query service", () => {
             score: 0.9,
             payload: {
               text: "test",
-              tier2Meta: { entities: [{ text: "EntityA" }] },
-              tier3Meta: { entities: [{ name: "EntityB" }] },
+              tier2: { entities: [{ text: "EntityA" }] },
+              tier3: { entities: [{ name: "EntityB" }] },
             },
           },
         ]),
@@ -315,7 +315,7 @@ describe("query service", () => {
             score: 0.9,
             payload: {
               text: "test",
-              tier2Meta: { entities: [{ text: "SharedEntity" }] },
+              tier2: { entities: [{ text: "SharedEntity" }] },
             },
           },
           {
@@ -323,7 +323,7 @@ describe("query service", () => {
             score: 0.8,
             payload: {
               text: "test2",
-              tier2Meta: { entities: [{ text: "SharedEntity" }] },
+              tier2: { entities: [{ text: "SharedEntity" }] },
             },
           },
         ]),
@@ -374,7 +374,7 @@ describe("query service", () => {
             score: 0.9,
             payload: {
               text: "test",
-              tier2Meta: { entities: [{ text: "OriginalEntity" }] },
+              tier2: { entities: [{ text: "OriginalEntity" }] },
             },
           },
         ]),

@@ -90,18 +90,18 @@ export async function query(
     // Extract entity names from tier2/tier3 metadata in results
     const entityNames = new Set<string>();
     for (const result of results) {
-      const tier2Meta = result.payload?.tier2Meta as Record<string, unknown> | undefined;
-      const tier3Meta = result.payload?.tier3Meta as Record<string, unknown> | undefined;
+      const tier2 = result.payload?.tier2 as Record<string, unknown> | undefined;
+      const tier3 = result.payload?.tier3 as Record<string, unknown> | undefined;
 
-      if (tier2Meta?.entities) {
-        const entities = tier2Meta.entities as Array<{ text: string }>;
+      if (tier2?.entities) {
+        const entities = tier2.entities as Array<{ text: string }>;
         for (const entity of entities) {
           entityNames.add(entity.text);
         }
       }
 
-      if (tier3Meta?.entities) {
-        const entities = tier3Meta.entities as Array<{ name: string }>;
+      if (tier3?.entities) {
+        const entities = tier3.entities as Array<{ name: string }>;
         for (const entity of entities) {
           entityNames.add(entity.name);
         }

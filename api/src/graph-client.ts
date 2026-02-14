@@ -57,8 +57,11 @@ export async function expandEntities(
   entityNames: string[],
   depth = DEFAULT_DEPTH,
 ): Promise<Entity[]> {
+  // Short-circuit on empty input before initializing driver
+  if (entityNames.length === 0) return [];
+
   const d = getDriver();
-  if (!d || entityNames.length === 0) return [];
+  if (!d) return [];
 
   // Sanitize depth: ensure it is a positive integer within a reasonable upper bound.
   const normalizedDepth = Number.isInteger(depth) ? depth : DEFAULT_DEPTH;

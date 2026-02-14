@@ -111,11 +111,11 @@ export async function getEnrichmentStatus(
         latestExtractedAt = extractedAt;
       }
 
-      if (chunk.payload.tier2Meta) {
-        tier2Meta = chunk.payload.tier2Meta as Record<string, unknown>;
+      if (chunk.payload.tier2) {
+        tier2Meta = chunk.payload.tier2 as Record<string, unknown>;
       }
-      if (chunk.payload.tier3Meta) {
-        tier3Meta = chunk.payload.tier3Meta as Record<string, unknown>;
+      if (chunk.payload.tier3) {
+        tier3Meta = chunk.payload.tier3 as Record<string, unknown>;
       }
     }
   }
