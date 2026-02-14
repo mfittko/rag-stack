@@ -37,13 +37,13 @@ async def process_task(task: Dict) -> None:
     
     try:
         # Update status to processing
-        update_enrichment_status(qdrant_id, collection, "processing")
+        await update_enrichment_status(qdrant_id, collection, "processing")
         
         # Tier 2: NLP extraction (per-chunk)
         tier2_data = await run_tier2_extraction(text)
         
         # Update Qdrant with tier-2 results
-        update_payload(qdrant_id, collection, {"tier2": tier2_data})
+        await update_payload(qdrant_id, collection, {"tier2": tier2_data})
         
         # Tier 3: LLM extraction (document-level - only on last chunk)
         if chunk_index == total_chunks - 1:
@@ -52,13 +52,13 @@ async def process_task(task: Dict) -> None:
             )
         
         # Mark chunk as enriched
-        update_enrichment_status(qdrant_id, collection, "enriched")
+        await update_enrichment_status(qdrant_id, collection, "enriched")
         
         logger.info(f"Successfully processed {base_id}:{chunk_index}")
         
     except Exception as e:
         logger.error(f"Error processing task {qdrant_id}: {e}", exc_info=True)
-        update_enrichment_status(qdrant_id, collection, "failed")
+        await update_enrichment_status(qdrant_id, collection, "failed")
         raise
 
 
@@ -74,16 +74,19 @@ async def run_tier2_extraction(text: str) -> Dict:
     tier2 = {}
     
     try:
-        # Entity extraction
-        entities = nlp_entities(text)
+        # Run CPU-bound NLP extractions in thread pool to avoid blocking event loop
+        entities_task = asyncio.to_thread(nlp_entities, text)
+        keywords_task = asyncio.to_thread(extract_keywords, text)
+        language_task = asyncio.to_thread(detect_language, text)
+        
+        entities, keywords, language = await asyncio.gather(
+            entities_task,
+            keywords_task,
+            language_task,
+        )
+        
         tier2["entities"] = entities
-        
-        # Keyword extraction
-        keywords = extract_keywords(text)
         tier2["keywords"] = keywords
-        
-        # Language detection
-        language = detect_language(text)
         tier2["language"] = language
         
         logger.debug(f"Tier-2 extraction: {len(entities)} entities, {len(keywords)} keywords, lang={language}")
@@ -115,7 +118,7 @@ async def run_document_level_extraction(
     
     try:
         # Aggregate all chunks
-        full_text = aggregate_chunks(base_id, collection, total_chunks)
+        full_text = await aggregate_chunks(base_id, collection, total_chunks)
         
         # Type-specific metadata extraction
         schema_cls, _ = get_schema_for_doctype(doc_type)
@@ -127,9 +130,11 @@ async def run_document_level_extraction(
         entity_result = await adapter.extract_entities(full_text)
         
         # Update all chunks with tier-3 results
+        update_tasks = []
         for i in range(total_chunks):
             chunk_id = f"{base_id}:{i}"
-            update_payload(chunk_id, collection, {"tier3": tier3_meta})
+            update_tasks.append(update_payload(chunk_id, collection, {"tier3": tier3_meta}))
+        await asyncio.gather(*update_tasks)
         
         # Write to Neo4j
         await write_to_neo4j(
@@ -200,7 +205,7 @@ async def write_to_neo4j(
         # Don't raise - graph write is best-effort
 
 
-def aggregate_chunks(base_id: str, collection: str, total_chunks: int) -> str:
+async def aggregate_chunks(base_id: str, collection: str, total_chunks: int) -> str:
     """Aggregate text from all chunks of a document.
     
     Args:
@@ -215,7 +220,9 @@ def aggregate_chunks(base_id: str, collection: str, total_chunks: int) -> str:
     chunk_ids = [f"{base_id}:{i}" for i in range(total_chunks)]
     
     try:
-        points = qdrant.retrieve(
+        # Run synchronous Qdrant call in thread pool to avoid blocking event loop
+        points = await asyncio.to_thread(
+            qdrant.retrieve,
             collection_name=collection,
             ids=chunk_ids
         )

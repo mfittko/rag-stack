@@ -118,25 +118,31 @@ async def test_process_task_multi_chunk(mock_task):
         assert mock_adapter.extract_metadata.called
 
 
-def test_aggregate_chunks():
+@pytest.mark.asyncio
+async def test_aggregate_chunks():
     """Test chunk aggregation."""
     with patch("src.pipeline.qdrant") as mock_qdrant:
-        # Mock Qdrant points
+        # Mock Qdrant points returned in a single bulk retrieve call
         mock_qdrant.retrieve.return_value = [
-            MagicMock(payload={"text": "chunk 0"}),
+            MagicMock(id="base-id:0", payload={"text": "chunk 0"}),
+            MagicMock(id="base-id:1", payload={"text": "chunk 1"}),
         ]
         
-        result = aggregate_chunks("base-id", "docs", 2)
+        result = await aggregate_chunks("base-id", "docs", 2)
         
-        # Should have made 2 retrieve calls
-        assert mock_qdrant.retrieve.call_count == 2
+        # Should have made a single bulk retrieve call
+        assert mock_qdrant.retrieve.call_count == 1
         assert isinstance(result, str)
+        # Aggregated result should contain all chunk texts
+        assert "chunk 0" in result
+        assert "chunk 1" in result
 
 
-def test_update_enrichment_status():
+@pytest.mark.asyncio
+async def test_update_enrichment_status():
     """Test updating enrichment status."""
     with patch("src.pipeline.qdrant") as mock_qdrant:
-        update_enrichment_status("point-id", "docs", "enriched")
+        await update_enrichment_status("point-id", "docs", "enriched")
         
         # Verify set_payload was called
         assert mock_qdrant.set_payload.called
@@ -144,11 +150,12 @@ def test_update_enrichment_status():
         assert call_args[1]["payload"]["enrichmentStatus"] == "enriched"
 
 
-def test_update_payload():
+@pytest.mark.asyncio
+async def test_update_payload():
     """Test updating point payload."""
     with patch("src.pipeline.qdrant") as mock_qdrant:
         payload = {"tier2": {"entities": [], "keywords": []}}
-        update_payload("point-id", "docs", payload)
+        await update_payload("point-id", "docs", payload)
         
         # Verify set_payload was called
         assert mock_qdrant.set_payload.called

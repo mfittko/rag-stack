@@ -17,8 +17,9 @@ def mock_driver():
     """Create a mock Neo4j driver."""
     driver = MagicMock()
     session = MagicMock()
-    driver.session.return_value.__aenter__.return_value = session
     session.run = AsyncMock()
+    driver.session.return_value.__aenter__ = AsyncMock(return_value=session)
+    driver.session.return_value.__aexit__ = AsyncMock(return_value=None)
     return driver, session
 
 

@@ -29,6 +29,13 @@ async def process_task_with_retry(redis_client: aioredis.Redis, task: dict) -> N
     task_id = task.get("taskId", "unknown")
     attempt = task.get("attempt", 1)
     
+    # Check if task should be delayed for retry backoff
+    retry_after = task.get("retryAfter", 0)
+    if retry_after > time.time():
+        delay = retry_after - time.time()
+        logger.info(f"Task {task_id} delayed for {delay:.1f}s (retry backoff)")
+        await asyncio.sleep(delay)
+    
     try:
         start_time = time.time()
         
@@ -53,14 +60,11 @@ async def process_task_with_retry(redis_client: aioredis.Redis, task: dict) -> N
         
         # Retry logic
         if attempt < MAX_RETRIES:
-            # Apply exponential backoff before re-queueing to avoid hot-loop retries
-            backoff_seconds = min(2 ** (attempt - 1), 60)
-            await asyncio.sleep(backoff_seconds)
-            
-            # Increment attempt and re-queue, preserving FIFO ordering
+            # Increment attempt and re-queue immediately (backoff handled externally)
             task["attempt"] = attempt + 1
+            task["retryAfter"] = time.time() + min(2 ** (attempt - 1), 60)
             await redis_client.rpush(QUEUE_NAME, json.dumps(task))
-            logger.info(f"Re-queued task {task_id} for retry {attempt + 1} after {backoff_seconds}s backoff")
+            logger.info(f"Re-queued task {task_id} for retry {attempt + 1}")
         else:
             # Move to dead-letter queue
             await redis_client.lpush(DEAD_LETTER_QUEUE, json.dumps(task))
@@ -82,6 +86,7 @@ async def worker_task(redis_client: aioredis.Redis, semaphore: asyncio.Semaphore
             
             # Acquire semaphore to limit concurrency
             async with semaphore:
+                # Process the task - backoff happens outside semaphore if retry needed
                 await process_task_with_retry(redis_client, task)
                 
         except Exception as e:

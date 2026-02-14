@@ -12,7 +12,7 @@ async def test_ollama_adapter_extract_metadata():
     adapter = OllamaAdapter()
     
     # Mock the httpx client
-    with patch("httpx.AsyncClient") as mock_client:
+    with patch("httpx.AsyncClient") as mock_client_class:
         mock_response = MagicMock()
         mock_response.status_code = 200
         mock_response.json.return_value = {
@@ -20,7 +20,11 @@ async def test_ollama_adapter_extract_metadata():
         }
         mock_response.raise_for_status = MagicMock()
         
-        mock_client.return_value.__aenter__.return_value.post = AsyncMock(return_value=mock_response)
+        # Create async context manager mock
+        mock_client = MagicMock()
+        mock_client.post = AsyncMock(return_value=mock_response)
+        mock_client_class.return_value.__aenter__ = AsyncMock(return_value=mock_client)
+        mock_client_class.return_value.__aexit__ = AsyncMock(return_value=None)
         
         schema = {
             "type": "object",
@@ -41,7 +45,7 @@ async def test_ollama_adapter_extract_entities():
     """Test Ollama adapter entity extraction."""
     adapter = OllamaAdapter()
     
-    with patch("httpx.AsyncClient") as mock_client:
+    with patch("httpx.AsyncClient") as mock_client_class:
         mock_response = MagicMock()
         mock_response.status_code = 200
         mock_response.json.return_value = {
@@ -49,7 +53,11 @@ async def test_ollama_adapter_extract_entities():
         }
         mock_response.raise_for_status = MagicMock()
         
-        mock_client.return_value.__aenter__.return_value.post = AsyncMock(return_value=mock_response)
+        # Create async context manager mock
+        mock_client = MagicMock()
+        mock_client.post = AsyncMock(return_value=mock_response)
+        mock_client_class.return_value.__aenter__ = AsyncMock(return_value=mock_client)
+        mock_client_class.return_value.__aexit__ = AsyncMock(return_value=None)
         
         result = await adapter.extract_entities("test text")
         
@@ -63,11 +71,15 @@ async def test_ollama_adapter_is_available():
     """Test Ollama availability check."""
     adapter = OllamaAdapter()
     
-    with patch("httpx.AsyncClient") as mock_client:
+    with patch("httpx.AsyncClient") as mock_client_class:
         mock_response = MagicMock()
         mock_response.status_code = 200
         
-        mock_client.return_value.__aenter__.return_value.get = AsyncMock(return_value=mock_response)
+        # Create async context manager mock
+        mock_client = MagicMock()
+        mock_client.get = AsyncMock(return_value=mock_response)
+        mock_client_class.return_value.__aenter__ = AsyncMock(return_value=mock_client)
+        mock_client_class.return_value.__aexit__ = AsyncMock(return_value=None)
         
         result = await adapter.is_available()
         
@@ -79,8 +91,12 @@ async def test_ollama_adapter_is_not_available():
     """Test Ollama availability check when service is down."""
     adapter = OllamaAdapter()
     
-    with patch("httpx.AsyncClient") as mock_client:
-        mock_client.return_value.__aenter__.return_value.get = AsyncMock(side_effect=Exception("Connection error"))
+    with patch("httpx.AsyncClient") as mock_client_class:
+        # Create async context manager mock that raises exception
+        mock_client = MagicMock()
+        mock_client.get = AsyncMock(side_effect=Exception("Connection error"))
+        mock_client_class.return_value.__aenter__ = AsyncMock(return_value=mock_client)
+        mock_client_class.return_value.__aexit__ = AsyncMock(return_value=None)
         
         result = await adapter.is_available()
         
@@ -92,7 +108,7 @@ async def test_ollama_adapter_describe_image():
     """Test Ollama image description."""
     adapter = OllamaAdapter()
     
-    with patch("httpx.AsyncClient") as mock_client:
+    with patch("httpx.AsyncClient") as mock_client_class:
         mock_response = MagicMock()
         mock_response.status_code = 200
         mock_response.json.return_value = {
@@ -100,7 +116,11 @@ async def test_ollama_adapter_describe_image():
         }
         mock_response.raise_for_status = MagicMock()
         
-        mock_client.return_value.__aenter__.return_value.post = AsyncMock(return_value=mock_response)
+        # Create async context manager mock
+        mock_client = MagicMock()
+        mock_client.post = AsyncMock(return_value=mock_response)
+        mock_client_class.return_value.__aenter__ = AsyncMock(return_value=mock_client)
+        mock_client_class.return_value.__aexit__ = AsyncMock(return_value=None)
         
         result = await adapter.describe_image("base64imagedata", "test context")
         
@@ -128,7 +148,7 @@ async def test_ollama_adapter_handles_invalid_json():
     """Test Ollama adapter handles invalid JSON gracefully."""
     adapter = OllamaAdapter()
     
-    with patch("httpx.AsyncClient") as mock_client:
+    with patch("httpx.AsyncClient") as mock_client_class:
         mock_response = MagicMock()
         mock_response.status_code = 200
         mock_response.json.return_value = {
@@ -136,7 +156,11 @@ async def test_ollama_adapter_handles_invalid_json():
         }
         mock_response.raise_for_status = MagicMock()
         
-        mock_client.return_value.__aenter__.return_value.post = AsyncMock(return_value=mock_response)
+        # Create async context manager mock
+        mock_client = MagicMock()
+        mock_client.post = AsyncMock(return_value=mock_response)
+        mock_client_class.return_value.__aenter__ = AsyncMock(return_value=mock_client)
+        mock_client_class.return_value.__aexit__ = AsyncMock(return_value=None)
         
         schema = {
             "type": "object",
