@@ -445,7 +445,7 @@ async function main() {
   program
     .name("rag-index")
     .description("CLI tool for indexing repositories and querying the RAG API")
-    .version("0.5.0");
+    .version("1.0.0");
 
   program
     .command("index")
