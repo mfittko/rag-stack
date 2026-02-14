@@ -58,8 +58,7 @@ async function readFileContent(filePath: string, docType: string): Promise<{ tex
         },
       };
     } catch (error: any) {
-      const code = error && typeof error === "object" ? error.code : undefined;
-      if (code === "ERR_MODULE_NOT_FOUND" || code === "MODULE_NOT_FOUND") {
+      if (error?.code === "ERR_MODULE_NOT_FOUND" || error?.code === "MODULE_NOT_FOUND") {
         throw new Error(
           "pdf-parse package is required to process PDF files. Install it with: npm install pdf-parse"
         );
@@ -341,7 +340,7 @@ async function cmdIngest(options: any) {
       const { text, metadata = {} } = await readFileContent(filePath, docType);
       
       // Warn about large images (check original file size from metadata)
-      if (docType === "image" && metadata.sizeBytes && metadata.sizeBytes > LARGE_IMAGE_THRESHOLD_BYTES) {
+      if (docType === "image" && metadata.sizeBytes > LARGE_IMAGE_THRESHOLD_BYTES) {
         console.warn(`[rag-index] Warning: Large image file (${Math.round(metadata.sizeBytes / 1024)}KB) will be base64-encoded: ${filePath}`);
       }
       
