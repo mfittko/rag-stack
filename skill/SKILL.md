@@ -1,9 +1,9 @@
 ---
 name: rag-stack
 description: >
-  Index Git repositories and query code context using rag-stack semantic search.
-  Use when the user needs to search code, find relevant source files, understand
-  a codebase, index a repository for retrieval, or get grounded context about code.
+  Store and retrieve knowledge using rag-stack semantic search. Ingest any text
+  content — code, docs, articles, emails, transcripts, notes — and query it by
+  natural language. Use when the user needs grounded context from their knowledge base.
 version: 0.1.0
 compatibility: Requires curl and a running rag-stack instance (Docker Compose or Kubernetes)
 metadata:
@@ -21,12 +21,14 @@ metadata:
         secret: true
 ---
 
-# rag-stack — Semantic Code Search
+# rag-stack — Semantic Knowledge Base
 
-Index Git repositories and retrieve relevant code context via natural-language queries.
+Store any text content and retrieve it via natural-language queries.
 
-rag-stack chunks source files, embeds them with a local model (Ollama + nomic-embed-text),
+rag-stack chunks text, embeds it with a local model (Ollama + nomic-embed-text),
 stores vectors in Qdrant, and serves similarity search over an HTTP API.
+Content types: source code, markdown docs, blog articles, email threads,
+YouTube transcripts, meeting notes, or any plain text.
 
 ## Environment
 
@@ -56,7 +58,7 @@ If the health check fails, remind the user to start the stack:
 docker compose up -d   # from the rag-stack repo root
 ```
 
-## Querying Code
+## Querying the Knowledge Base
 
 ### Basic Query
 
@@ -72,9 +74,23 @@ curl -s -X POST "$RAG_STACK_URL/query" \
 
 Omit the `Authorization` header if rag-stack has no token configured.
 
+Works for any content type — code, docs, articles, transcripts:
+
+```bash
+# Find relevant meeting notes
+curl -s -X POST "$RAG_STACK_URL/query" \
+  -H "Content-Type: application/json" \
+  -d '{"query": "Q1 roadmap decisions", "topK": 5}' | jq '.results[]'
+
+# Search indexed blog articles
+curl -s -X POST "$RAG_STACK_URL/query" \
+  -H "Content-Type: application/json" \
+  -d '{"query": "React server components best practices", "topK": 5}' | jq '.results[]'
+```
+
 ### Query with Filters
 
-Filter by repository:
+Filter by source collection (e.g., a specific repo or content set):
 
 ```bash
 curl -s -X POST "$RAG_STACK_URL/query" \
@@ -91,7 +107,7 @@ curl -s -X POST "$RAG_STACK_URL/query" \
   }' | jq '.results[] | {score, source, text: (.text | .[0:200])}'
 ```
 
-Filter by language:
+Filter by content type (when metadata includes `lang`):
 
 ```bash
 curl -s -X POST "$RAG_STACK_URL/query" \
@@ -163,15 +179,34 @@ Combine multiple filters (AND logic) by adding entries to the `must` array.
 
 Results are ordered by similarity score (highest first). `score` ranges 0.0–1.0.
 
-## Indexing a Repository
+## Ingesting Content
 
-Indexing clones a Git repo, chunks every source file, embeds each chunk, and stores them in Qdrant.
+Ingest any text into the knowledge base. rag-stack chunks it, embeds each chunk, and stores vectors in Qdrant.
 
-### Via the API (curl)
+### Via the API (any text content)
 
-Send files directly to the `/ingest` endpoint:
+Send any text directly to the `/ingest` endpoint:
 
 ```bash
+# Ingest a local file (doc, article, transcript, code, etc.)
+curl -s -X POST "$RAG_STACK_URL/ingest" \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer $RAG_STACK_TOKEN" \
+  -d '{
+    "collection": "docs",
+    "items": [
+      {
+        "id": "meeting-notes:2026-02-14",
+        "text": "'"$(cat notes/2026-02-14-standup.md)"'",
+        "source": "notes/2026-02-14-standup.md",
+        "metadata": {"type": "meeting-notes", "date": "2026-02-14"}
+      }
+    ]
+  }' | jq .
+```
+
+```bash
+# Ingest a source file
 curl -s -X POST "$RAG_STACK_URL/ingest" \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer $RAG_STACK_TOKEN" \
@@ -190,11 +225,11 @@ curl -s -X POST "$RAG_STACK_URL/ingest" \
 
 Response: `{"ok": true, "upserted": <chunk_count>}`
 
-For bulk indexing, prefer the CLI below — it handles git clone, file scanning, batching, and filtering automatically.
+You can ingest multiple items in a single request. Use any metadata keys that help with filtering later.
 
-### Via the CLI (recommended for full repos)
+### Via the CLI (bulk Git repository indexing)
 
-The rag-stack CLI automates the full pipeline. From the rag-stack repo:
+For indexing entire Git repositories, the CLI automates cloning, scanning, batching, and filtering. From the rag-stack repo:
 
 ```bash
 cd cli && npm install && npm run build

@@ -1,7 +1,8 @@
 # rag-stack OpenClaw Skill
 
-An [OpenClaw](https://openclaw.ai/) AgentSkill that gives your agent semantic
-code search over indexed Git repositories.
+An [OpenClaw](https://openclaw.ai/) AgentSkill that gives your agent a semantic
+knowledge base — ingest code, docs, articles, emails, transcripts, or any text
+and retrieve relevant context via natural-language queries.
 
 ## Install
 
