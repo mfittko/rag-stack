@@ -354,8 +354,8 @@ GET /graph/entity/AuthService
     "description": "Handles user authentication"
   },
   "connections": [
-    { "name": "JWT", "type": "library", "relationship": "USES" },
-    { "name": "UserService", "type": "class", "relationship": "RELATES_TO" }
+    { "entity": "JWT", "relationship": "uses", "direction": "outgoing" },
+    { "entity": "UserService", "relationship": "relates_to", "direction": "incoming" }
   ],
   "documents": [
     { "id": "my-repo:src/auth.ts:0" },
@@ -368,6 +368,9 @@ GET /graph/entity/AuthService
 |-------|------|-------------|
 | `entity` | object | The requested entity's metadata |
 | `connections` | array | Related entities from the graph |
+| `connections[].entity` | string | Name of the connected entity |
+| `connections[].relationship` | string | Type of relationship |
+| `connections[].direction` | string | Relationship direction: `"outgoing"` or `"incoming"` |
 | `documents` | array | Documents that mention this entity |
 
 **Error Responses:**

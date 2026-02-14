@@ -52,8 +52,9 @@ describe("enrichment service", () => {
       expect(result.chunks.enriched).toBe(3);
       expect(result.extractedAt).toBe("2026-02-14T10:05:00Z");
       // Verify metadata is returned from tier2/tier3
-      expect(result.metadata.tier2).toEqual({ entities: [], keywords: [] });
-      expect(result.metadata.tier3).toEqual({ summary: "test" });
+      expect(result.metadata).toBeDefined();
+      expect(result.metadata?.tier2).toEqual({ entities: [], keywords: [] });
+      expect(result.metadata?.tier3).toEqual({ summary: "test" });
     });
 
     it("returns mixed status when chunks are in different states", async () => {
