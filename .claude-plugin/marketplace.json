@@ -1,0 +1,17 @@
+{
+  "name": "rag-stack",
+  "version": "1.0.0",
+  "description": "Semantic knowledge base - ingest any text and query it by natural language",
+  "owner": {
+    "name": "Manuel Fittko"
+  },
+  "plugins": [
+    {
+      "name": "rag-stack",
+      "description": "Store and retrieve knowledge using semantic search over any text content",
+      "version": "0.1.0",
+      "source": "./skill",
+      "category": "productivity"
+    }
+  ]
+}
