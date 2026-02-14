@@ -123,9 +123,8 @@ async def add_relationship(
         await session.run("""
             MERGE (s:Entity {name: $source})
             MERGE (t:Entity {name: $target})
-            MERGE (s)-[r:RELATES_TO]->(t)
-            SET r.type = $type,
-                r.description = $description
+            MERGE (s)-[r:RELATES_TO {type: $type}]->(t)
+            SET r.description = $description
         """, source=source, target=target, type=rel_type, description=description)
 
 

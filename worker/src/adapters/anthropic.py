@@ -21,9 +21,13 @@ class AnthropicAdapter(ExtractorAdapter):
         self.capable_model = EXTRACTOR_MODEL_CAPABLE
         self.max_tokens = 4096
     
-    async def extract_metadata(self, text: str, doc_type: str, schema: Dict) -> Dict:
+    async def extract_metadata(self, text: str, doc_type: str, schema: Dict, prompt_template: str = "") -> Dict:
         """Extract type-specific metadata using Claude."""
-        prompt = f"""Analyze this {doc_type} document and extract metadata according to the provided schema.
+        # Use custom prompt template if provided, otherwise use generic prompt
+        if prompt_template:
+            prompt = prompt_template.replace("{text}", text[:8000]).replace("{schema}", json.dumps(schema, indent=2))
+        else:
+            prompt = f"""Analyze this {doc_type} document and extract metadata according to the provided schema.
 
 Text:
 {text[:8000]}

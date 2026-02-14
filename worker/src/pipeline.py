@@ -4,7 +4,7 @@ import logging
 from typing import Dict
 from qdrant_client import QdrantClient
 from src.config import QDRANT_URL
-from src.tier2 import extract_entities as nlp_entities, extract_keywords, detect_language
+from src.tier2 import process_text_nlp, detect_language
 from src.adapters import get_adapter
 from src.schemas import get_schema_for_doctype
 from src import graph
@@ -73,23 +73,39 @@ async def run_tier2_extraction(text: str) -> Dict:
     
     try:
         # Run CPU-bound NLP extractions in thread pool to avoid blocking event loop
-        entities_task = asyncio.to_thread(nlp_entities, text)
-        keywords_task = asyncio.to_thread(extract_keywords, text)
+        # Use optimized single-pass NLP for entities + keywords
+        nlp_task = asyncio.to_thread(process_text_nlp, text)
         language_task = asyncio.to_thread(detect_language, text)
         
-        entities, keywords, language = await asyncio.gather(
-            entities_task,
-            keywords_task,
+        nlp_result, language_result = await asyncio.gather(
+            nlp_task,
             language_task,
+            return_exceptions=True,
         )
         
-        tier2["entities"] = entities
-        tier2["keywords"] = keywords
-        tier2["language"] = language
+        # Handle NLP result (entities + keywords)
+        if isinstance(nlp_result, Exception):
+            logger.warning(f"Tier-2 NLP extraction failed: {nlp_result}")
+            tier2["entities"] = []
+            tier2["keywords"] = []
+        else:
+            tier2["entities"] = nlp_result.get("entities", [])
+            tier2["keywords"] = nlp_result.get("keywords", [])
         
-        logger.debug(f"Tier-2 extraction: {len(entities)} entities, {len(keywords)} keywords, lang={language}")
+        # Handle language detection result
+        if isinstance(language_result, Exception):
+            logger.warning(f"Tier-2 language detection failed: {language_result}")
+            tier2["language"] = "unknown"
+        else:
+            tier2["language"] = language_result
+        
+        logger.debug(
+            f"Tier-2 extraction: {len(tier2['entities'])} entities, "
+            f"{len(tier2['keywords'])} keywords, lang={tier2['language']}"
+        )
         
     except Exception as e:
+        # Fallback in case of unexpected errors outside individual tasks
         logger.warning(f"Tier-2 extraction failed: {e}")
         tier2 = {"entities": [], "keywords": [], "language": "unknown"}
     
@@ -119,10 +135,10 @@ async def run_document_level_extraction(
         full_text = await aggregate_chunks(base_id, collection, total_chunks)
         
         # Type-specific metadata extraction
-        schema_cls, _ = get_schema_for_doctype(doc_type)
+        schema_cls, prompt_template = get_schema_for_doctype(doc_type)
         schema_dict = schema_cls.model_json_schema()
         
-        tier3_meta = await adapter.extract_metadata(full_text, doc_type, schema_dict)
+        tier3_meta = await adapter.extract_metadata(full_text, doc_type, schema_dict, prompt_template)
         
         # Entity + relationship extraction
         entity_result = await adapter.extract_entities(full_text)

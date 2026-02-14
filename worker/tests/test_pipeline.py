@@ -11,6 +11,15 @@ from src.pipeline import (
 )
 
 
+# Check if spaCy model is available
+try:
+    import spacy
+    spacy.load("en_core_web_sm")
+    SPACY_AVAILABLE = True
+except:
+    SPACY_AVAILABLE = False
+
+
 @pytest.fixture
 def mock_task():
     """Create a mock task."""
@@ -29,6 +38,7 @@ def mock_task():
 
 
 @pytest.mark.asyncio
+@pytest.mark.skipif(not SPACY_AVAILABLE, reason="spaCy model en_core_web_sm not installed")
 async def test_run_tier2_extraction():
     """Test tier-2 extraction."""
     text = "Apple Inc. was founded by Steve Jobs in Cupertino."
@@ -191,7 +201,7 @@ async def test_run_document_level_extraction():
         
         # Mock Qdrant retrieve
         mock_qdrant.retrieve.return_value = [
-            MagicMock(payload={"text": "test text"})
+            MagicMock(id="base-id:0", payload={"text": "test text"})
         ]
         
         # Mock adapter responses

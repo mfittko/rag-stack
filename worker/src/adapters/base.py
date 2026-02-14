@@ -16,13 +16,14 @@ class ExtractorAdapter(ABC):
     """Abstract base class for LLM extraction adapters."""
     
     @abstractmethod
-    async def extract_metadata(self, text: str, doc_type: str, schema: Dict) -> Dict:
+    async def extract_metadata(self, text: str, doc_type: str, schema: Dict, prompt_template: str = "") -> Dict:
         """Extract type-specific metadata using the fast model.
         
         Args:
             text: Text to analyze
             doc_type: Document type (code, slack, email, etc.)
             schema: JSON schema for the expected output
+            prompt_template: Optional prompt template from schema module
             
         Returns:
             Extracted metadata as a dictionary

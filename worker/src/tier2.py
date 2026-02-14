@@ -94,3 +94,32 @@ def detect_language(text: str) -> str:
         return detect(normalized)
     except Exception:
         return "unknown"
+
+
+def process_text_nlp(text: str) -> Dict:
+    """Process text with spaCy in a single pass for entities and keywords.
+    
+    This is more efficient than calling extract_entities() and extract_keywords()
+    separately as it runs the spaCy pipeline only once.
+    
+    Args:
+        text: Input text to analyze
+        
+    Returns:
+        Dictionary with 'entities' and 'keywords' lists
+    """
+    if not text or not text.strip():
+        return {"entities": [], "keywords": []}
+    
+    nlp = _get_nlp()
+    doc = nlp(text)
+    
+    # Extract entities
+    entities = [{"text": ent.text, "label": ent.label_} for ent in doc.ents]
+    
+    # Extract keywords from TextRank
+    keywords = []
+    for phrase in doc._.phrases[:10]:  # Top 10 keywords
+        keywords.append(phrase.text)
+    
+    return {"entities": entities, "keywords": keywords}

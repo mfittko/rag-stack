@@ -19,10 +19,14 @@ class OllamaAdapter(ExtractorAdapter):
         self.vision_model = EXTRACTOR_MODEL_VISION
         self.timeout = 60.0
     
-    async def extract_metadata(self, text: str, doc_type: str, schema: Dict) -> Dict:
+    async def extract_metadata(self, text: str, doc_type: str, schema: Dict, prompt_template: str = "") -> Dict:
         """Extract type-specific metadata using Ollama."""
-        # Truncate to 8000 chars to match other adapters (Ollama typically has larger context)
-        prompt = f"""Analyze this {doc_type} document and extract metadata according to the schema.
+        # Use custom prompt template if provided, otherwise use generic prompt
+        if prompt_template:
+            prompt = prompt_template.replace("{text}", text[:8000]).replace("{schema}", json.dumps(schema, indent=2))
+        else:
+            # Truncate to 8000 chars to match other adapters (Ollama typically has larger context)
+            prompt = f"""Analyze this {doc_type} document and extract metadata according to the schema.
 
 Text:
 {text[:8000]}
