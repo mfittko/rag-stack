@@ -148,7 +148,15 @@ async def run_document_level_extraction(
         for i in range(total_chunks):
             chunk_id = f"{base_id}:{i}"
             update_tasks.append(update_payload(chunk_id, collection, {"tier3": tier3_meta}))
-        await asyncio.gather(*update_tasks)
+        
+        # Use return_exceptions to handle partial failures gracefully
+        update_results = await asyncio.gather(*update_tasks, return_exceptions=True)
+        for idx, result in enumerate(update_results):
+            if isinstance(result, Exception):
+                logger.error(
+                    f"Tier-3 payload update failed for chunk {base_id}:{idx}: {result}",
+                    exc_info=True,
+                )
         
         # Write to Neo4j
         await write_to_neo4j(

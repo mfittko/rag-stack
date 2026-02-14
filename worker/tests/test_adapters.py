@@ -174,3 +174,48 @@ async def test_ollama_adapter_handles_invalid_json():
         # Should return empty structure rather than crashing
         assert isinstance(result, dict)
         assert "summary" in result
+
+
+@pytest.mark.asyncio
+async def test_ollama_adapter_with_custom_prompt():
+    """Test Ollama adapter uses custom prompt template when provided."""
+    adapter = OllamaAdapter()
+    
+    with patch("httpx.AsyncClient") as mock_client_class:
+        mock_response = MagicMock()
+        mock_response.status_code = 200
+        mock_response.json.return_value = {
+            "response": '{"summary": "Custom prompt result", "topics": ["AI", "ML"]}'
+        }
+        mock_response.raise_for_status = MagicMock()
+        
+        # Create async context manager mock
+        mock_client = MagicMock()
+        mock_client.post = AsyncMock(return_value=mock_response)
+        mock_client_class.return_value.__aenter__ = AsyncMock(return_value=mock_client)
+        mock_client_class.return_value.__aexit__ = AsyncMock(return_value=None)
+        
+        schema = {
+            "type": "object",
+            "properties": {
+                "summary": {"type": "string"},
+                "topics": {"type": "array"}
+            }
+        }
+        
+        custom_prompt = "Analyze this article and extract: {fields}"
+        result = await adapter.extract_metadata("article text", "article", schema, custom_prompt)
+        
+        # Verify the custom prompt was used (check the mock was called)
+        assert mock_client.post.called
+        call_args = mock_client.post.call_args
+        request_json = call_args[1]["json"]
+        
+        # Verify custom prompt template was incorporated
+        assert "prompt" in request_json
+        assert "Analyze this article" in request_json["prompt"]
+        
+        # Verify result structure
+        assert isinstance(result, dict)
+        assert "summary" in result
+        assert "topics" in result

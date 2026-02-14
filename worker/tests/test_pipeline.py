@@ -16,7 +16,7 @@ try:
     import spacy
     spacy.load("en_core_web_sm")
     SPACY_AVAILABLE = True
-except:
+except Exception:
     SPACY_AVAILABLE = False
 
 

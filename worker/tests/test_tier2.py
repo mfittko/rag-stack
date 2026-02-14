@@ -1,6 +1,6 @@
 """Tests for tier-2 NLP extraction."""
 import pytest
-from src.tier2 import extract_entities, extract_keywords, detect_language
+from src.tier2 import extract_entities, extract_keywords, detect_language, process_text_nlp
 
 
 # Helper to check if spaCy model is available
@@ -100,3 +100,31 @@ def test_detect_language_short():
     # Short text might not be reliably detected, but should not crash
     result = detect_language("Hi")
     assert isinstance(result, str)
+
+
+@requires_spacy_model
+def test_process_text_nlp():
+    """Test single-pass NLP processing for entities and keywords."""
+    text = "Apple Inc. was founded by Steve Jobs in California. The company revolutionized personal computing."
+    result = process_text_nlp(text)
+    
+    # Verify structure
+    assert "entities" in result
+    assert "keywords" in result
+    assert isinstance(result["entities"], list)
+    assert isinstance(result["keywords"], list)
+    
+    # Verify entities were extracted
+    assert len(result["entities"]) > 0
+    entity_texts = [e["text"] for e in result["entities"]]
+    assert any("Apple" in text for text in entity_texts)
+    
+    # Verify keywords were extracted
+    assert len(result["keywords"]) > 0
+
+
+@requires_spacy_model
+def test_process_text_nlp_empty():
+    """Test process_text_nlp with empty text."""
+    result = process_text_nlp("")
+    assert result == {"entities": [], "keywords": []}

@@ -88,7 +88,7 @@ async def worker_task(redis_client: aioredis.Redis, semaphore: asyncio.Semaphore
             
             # Acquire semaphore to limit concurrency
             async with semaphore:
-                # Process the task - backoff happens outside semaphore if retry needed
+                # Process the task - backoff sleep happens inside semaphore to avoid tight Redis loop
                 await process_task_with_retry(redis_client, task)
                 
         except Exception as e:
@@ -100,15 +100,15 @@ async def worker_task(redis_client: aioredis.Redis, semaphore: asyncio.Semaphore
 async def worker_loop() -> None:
     """Main worker loop with multiple concurrent tasks."""
     redis_client = aioredis.from_url(REDIS_URL)
-    semaphore = asyncio.Semaphore(WORKER_CONCURRENCY)
     
     logger.info(f"Worker started with concurrency={WORKER_CONCURRENCY}")
     logger.info(f"Listening on queue: {QUEUE_NAME}")
     logger.info(f"Dead-letter queue: {DEAD_LETTER_QUEUE}")
     
-    # Create multiple worker tasks
+    # Create fixed number of worker tasks for concurrency control
+    # Each worker processes one task at a time from the queue
     workers = [
-        asyncio.create_task(worker_task(redis_client, semaphore))
+        asyncio.create_task(worker_task(redis_client))
         for _ in range(WORKER_CONCURRENCY)
     ]
     
