@@ -1,0 +1,61 @@
+import { createClient } from "redis";
+
+export interface EnrichmentTask {
+  taskId: string;
+  qdrantId: string;
+  collection: string;
+  docType: string;
+  baseId: string;
+  chunkIndex: number;
+  totalChunks: number;
+  text: string;
+  source: string;
+  tier1Meta: Record<string, unknown>;
+  attempt: number;
+  enqueuedAt: string;
+}
+
+const QUEUE_NAME = "enrichment:pending";
+const ENRICHMENT_ENABLED =
+  process.env.ENRICHMENT_ENABLED === "true" &&
+  Boolean(process.env.REDIS_URL);
+
+let redisClient: ReturnType<typeof createClient> | null = null;
+
+export function isEnrichmentEnabled(): boolean {
+  return ENRICHMENT_ENABLED;
+}
+
+async function getRedisClient() {
+  if (!isEnrichmentEnabled()) {
+    throw new Error("Enrichment is not enabled or REDIS_URL is not set");
+  }
+
+  if (!redisClient) {
+    redisClient = createClient({
+      url: process.env.REDIS_URL || "redis://localhost:6379",
+    });
+    redisClient.on("error", (err) => console.error("Redis error:", err));
+    await redisClient.connect();
+  }
+
+  return redisClient;
+}
+
+export async function enqueueEnrichment(
+  task: EnrichmentTask,
+): Promise<void> {
+  if (!isEnrichmentEnabled()) {
+    return; // Silently skip if enrichment is disabled
+  }
+
+  const client = await getRedisClient();
+  await client.lPush(QUEUE_NAME, JSON.stringify(task));
+}
+
+export async function closeRedis(): Promise<void> {
+  if (redisClient) {
+    await redisClient.quit();
+    redisClient = null;
+  }
+}

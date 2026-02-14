@@ -69,18 +69,20 @@ describe("ingest service", () => {
 
     await ingest(request, deps);
 
-    expect(upsertMock).toHaveBeenCalledWith("my-col", [
-      {
-        id: "doc-1:0",
-        vector: [0.1, 0.2, 0.3],
-        payload: {
-          text: "hello world",
-          source: "test.txt",
-          chunkIndex: 0,
-          lang: "en",
-        },
-      },
-    ]);
+    const points = (upsertMock.mock.calls[0] as any)[1];
+    expect(points).toBeDefined();
+    expect(points[0].id).toBe("doc-1:0");
+    expect(points[0].vector).toEqual([0.1, 0.2, 0.3]);
+    // Check core fields are present
+    expect(points[0].payload.text).toBe("hello world");
+    expect(points[0].payload.source).toBe("test.txt");
+    expect(points[0].payload.chunkIndex).toBe(0);
+    expect(points[0].payload.lang).toBe("en");
+    // Check new enrichment fields are present
+    expect(points[0].payload.docType).toBeDefined();
+    expect(points[0].payload.enrichmentStatus).toBeDefined();
+    expect(points[0].payload.ingestedAt).toBeDefined();
+    expect(points[0].payload.tier1Meta).toBeDefined();
   });
 
   it("generates UUID when item has no id", async () => {
@@ -164,14 +166,18 @@ describe("ingest service", () => {
 
     const points = (upsertMock.mock.calls[0] as any)[1];
     expect(points).toBeDefined();
-    expect(points[0].payload).toEqual({
-      repoId: "my-repo",
-      path: "src/test.txt",
-      lang: "ts",
-      bytes: 100,
-      text: "hello",
-      source: "test.txt",
-      chunkIndex: 0,
-    });
+    // Check metadata is spread into payload
+    expect(points[0].payload.repoId).toBe("my-repo");
+    expect(points[0].payload.path).toBe("src/test.txt");
+    expect(points[0].payload.lang).toBe("ts");
+    expect(points[0].payload.bytes).toBe(100);
+    expect(points[0].payload.text).toBe("hello");
+    expect(points[0].payload.source).toBe("test.txt");
+    expect(points[0].payload.chunkIndex).toBe(0);
+    // New enrichment fields should also be present
+    expect(points[0].payload.docType).toBeDefined();
+    expect(points[0].payload.enrichmentStatus).toBeDefined();
+    expect(points[0].payload.ingestedAt).toBeDefined();
+    expect(points[0].payload.tier1Meta).toBeDefined();
   });
 });

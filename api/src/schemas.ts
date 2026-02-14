@@ -4,6 +4,7 @@ export const ingestSchema = {
     required: ["items"],
     properties: {
       collection: { type: "string" as const },
+      enrich: { type: "boolean" as const },
       items: {
         type: "array" as const,
         minItems: 1,
@@ -14,6 +15,7 @@ export const ingestSchema = {
             id: { type: "string" as const },
             text: { type: "string" as const, minLength: 1, pattern: "\\S" },
             source: { type: "string" as const, minLength: 1, pattern: "\\S" },
+            docType: { type: "string" as const },
             metadata: { type: "object" as const },
           },
         },
