@@ -53,10 +53,14 @@ async def process_task_with_retry(redis_client: aioredis.Redis, task: dict) -> N
         
         # Retry logic
         if attempt < MAX_RETRIES:
-            # Increment attempt and re-queue
+            # Apply exponential backoff before re-queueing to avoid hot-loop retries
+            backoff_seconds = min(2 ** (attempt - 1), 60)
+            await asyncio.sleep(backoff_seconds)
+            
+            # Increment attempt and re-queue, preserving FIFO ordering
             task["attempt"] = attempt + 1
-            await redis_client.lpush(QUEUE_NAME, json.dumps(task))
-            logger.info(f"Re-queued task {task_id} for retry {attempt + 1}")
+            await redis_client.rpush(QUEUE_NAME, json.dumps(task))
+            logger.info(f"Re-queued task {task_id} for retry {attempt + 1} after {backoff_seconds}s backoff")
         else:
             # Move to dead-letter queue
             await redis_client.lpush(DEAD_LETTER_QUEUE, json.dumps(task))

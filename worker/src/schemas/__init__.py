@@ -40,10 +40,15 @@ def get_schema_for_doctype(doc_type: str) -> Tuple[Type[BaseModel], str]:
         from src.schemas.article import ArticleMetadata, PROMPT
         return ArticleMetadata, PROMPT
     
+    elif doc_type == "text":
+        # Explicit handling for generic text
+        from src.schemas.text import TextMetadata, PROMPT
+        return TextMetadata, PROMPT
+    
     else:
-        # Fallback for "text" or unknown types
-        from src.schemas.pdf import PDFMetadata, PROMPT
-        return PDFMetadata, PROMPT
+        # Fallback for unknown types - use generic text schema
+        from src.schemas.text import TextMetadata, PROMPT
+        return TextMetadata, PROMPT
 
 
 __all__ = ["get_schema_for_doctype"]

@@ -1,9 +1,35 @@
 """Tier-2 NLP extraction using spaCy and other NLP libraries."""
 import spacy
-from typing import List, Dict
+import threading
+from typing import List, Dict, Optional
 
-# Load spaCy model at module initialization
-nlp = spacy.load("en_core_web_sm")
+# Module-level state for lazy loading
+_nlp: Optional[spacy.Language] = None
+_nlp_lock = threading.Lock()
+_textrank_initialized = False
+
+
+def _get_nlp() -> spacy.Language:
+    """Lazy-load spaCy model with error handling."""
+    global _nlp, _textrank_initialized
+    
+    if _nlp is None:
+        with _nlp_lock:
+            if _nlp is None:  # Double-check after acquiring lock
+                try:
+                    _nlp = spacy.load("en_core_web_sm")
+                    # Initialize TextRank once during setup
+                    import pytextrank
+                    if "textrank" not in _nlp.pipe_names:
+                        _nlp.add_pipe("textrank")
+                        _textrank_initialized = True
+                except Exception as e:
+                    raise RuntimeError(
+                        f"Failed to load spaCy model 'en_core_web_sm'. "
+                        f"Ensure it's installed: python -m spacy download en_core_web_sm. "
+                        f"Error: {e}"
+                    )
+    return _nlp
 
 
 def extract_entities(text: str) -> List[Dict[str, str]]:
@@ -18,6 +44,7 @@ def extract_entities(text: str) -> List[Dict[str, str]]:
     if not text or not text.strip():
         return []
     
+    nlp = _get_nlp()
     doc = nlp(text)
     return [{"text": ent.text, "label": ent.label_} for ent in doc.ents]
 
@@ -35,11 +62,7 @@ def extract_keywords(text: str, top_n: int = 10) -> List[str]:
     if not text or not text.strip():
         return []
     
-    # Add pytextrank to pipeline if not already present
-    if "textrank" not in nlp.pipe_names:
-        import pytextrank
-        nlp.add_pipe("textrank")
-    
+    nlp = _get_nlp()
     doc = nlp(text)
     
     # Extract top phrases

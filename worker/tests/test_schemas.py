@@ -9,6 +9,7 @@ from src.schemas.meeting import MeetingMetadata, ActionItem as MeetingActionItem
 from src.schemas.image import ImageMetadata
 from src.schemas.pdf import PDFMetadata, Section
 from src.schemas.article import ArticleMetadata
+from src.schemas.text import TextMetadata
 from src.schemas.entities import Entity, Relationship, EntityExtractionResult
 
 
@@ -132,6 +133,19 @@ def test_article_schema():
     assert "python" in metadata.tags
 
 
+def test_text_schema():
+    """Test generic text metadata schema."""
+    data = {
+        "summary": "A generic document",
+        "key_entities": ["Entity1", "Entity2"]
+    }
+    metadata = TextMetadata(**data)
+    
+    assert metadata.summary == "A generic document"
+    assert len(metadata.key_entities) == 2
+    assert "Entity1" in metadata.key_entities
+
+
 def test_entity_schema():
     """Test entity extraction schema."""
     data = {
@@ -202,18 +216,29 @@ def test_get_schema_for_doctype_article():
 
 def test_get_schema_for_doctype_fallback():
     """Test schema router falls back for unknown types."""
+    from src.schemas.text import TextMetadata
+    
     schema_class, prompt = get_schema_for_doctype("unknown")
-    # Should return a fallback schema
-    assert schema_class is not None
+    # Should return text schema as fallback
+    assert schema_class == TextMetadata
     assert prompt is not None
 
 
 def test_schema_serialization():
     """Test that all schemas can be serialized to JSON schema."""
-    for doc_type in ["code", "slack", "email", "meeting", "image", "pdf", "article"]:
+    for doc_type in ["code", "slack", "email", "meeting", "image", "pdf", "article", "text"]:
         schema_class, _ = get_schema_for_doctype(doc_type)
         json_schema = schema_class.model_json_schema()
         
         # Verify it's a valid schema dict
         assert isinstance(json_schema, dict)
         assert "properties" in json_schema or "type" in json_schema
+
+
+def test_text_schema_explicit():
+    """Test that 'text' doc type returns TextMetadata explicitly."""
+    from src.schemas.text import TextMetadata
+    
+    schema_class, prompt = get_schema_for_doctype("text")
+    assert schema_class == TextMetadata
+    assert "text" in prompt.lower() or "generic" in prompt.lower()

@@ -1,4 +1,5 @@
 """Complete enrichment pipeline for processing tasks."""
+import asyncio
 import json
 import logging
 from typing import Dict, List
@@ -117,7 +118,7 @@ async def run_document_level_extraction(
         full_text = aggregate_chunks(base_id, collection, total_chunks)
         
         # Type-specific metadata extraction
-        schema_cls, prompt_template = get_schema_for_doctype(doc_type)
+        schema_cls, _ = get_schema_for_doctype(doc_type)
         schema_dict = schema_cls.model_json_schema()
         
         tier3_meta = await adapter.extract_metadata(full_text, doc_type, schema_dict)
@@ -210,26 +211,39 @@ def aggregate_chunks(base_id: str, collection: str, total_chunks: int) -> str:
     Returns:
         Concatenated text from all chunks
     """
-    texts = []
+    # Build list of all chunk IDs and retrieve in a single call to avoid N+1
+    chunk_ids = [f"{base_id}:{i}" for i in range(total_chunks)]
     
+    try:
+        points = qdrant.retrieve(
+            collection_name=collection,
+            ids=chunk_ids
+        )
+    except Exception as e:
+        logger.warning(f"Failed to retrieve chunks for {base_id}: {e}")
+        return ""
+    
+    # Map point IDs to their text payloads
+    id_to_text = {}
+    for point in points or []:
+        payload = getattr(point, "payload", None) or {}
+        text = payload.get("text", "")
+        point_id = getattr(point, "id", None)
+        if text and point_id:
+            id_to_text[point_id] = text
+    
+    # Preserve original ordering by chunk index
+    texts = []
     for i in range(total_chunks):
         chunk_id = f"{base_id}:{i}"
-        try:
-            points = qdrant.retrieve(
-                collection_name=collection,
-                ids=[chunk_id]
-            )
-            if points:
-                payload = points[0].payload
-                text = payload.get("text", "")
-                texts.append(text)
-        except Exception as e:
-            logger.warning(f"Failed to retrieve chunk {chunk_id}: {e}")
+        text = id_to_text.get(chunk_id)
+        if text:
+            texts.append(text)
     
     return "\n\n".join(texts)
 
 
-def update_enrichment_status(point_id: str, collection: str, status: str) -> None:
+async def update_enrichment_status(point_id: str, collection: str, status: str) -> None:
     """Update the enrichment status of a point in Qdrant.
     
     Args:
@@ -238,7 +252,9 @@ def update_enrichment_status(point_id: str, collection: str, status: str) -> Non
         status: New status (pending, processing, enriched, failed)
     """
     try:
-        qdrant.set_payload(
+        # Run synchronous Qdrant call in thread pool to avoid blocking event loop
+        await asyncio.to_thread(
+            qdrant.set_payload,
             collection_name=collection,
             payload={"enrichmentStatus": status},
             points=[point_id]
@@ -247,7 +263,7 @@ def update_enrichment_status(point_id: str, collection: str, status: str) -> Non
         logger.error(f"Failed to update enrichment status for {point_id}: {e}")
 
 
-def update_payload(point_id: str, collection: str, payload: Dict) -> None:
+async def update_payload(point_id: str, collection: str, payload: Dict) -> None:
     """Update the payload of a point in Qdrant.
     
     Args:
@@ -256,7 +272,9 @@ def update_payload(point_id: str, collection: str, payload: Dict) -> None:
         payload: Payload data to merge
     """
     try:
-        qdrant.set_payload(
+        # Run synchronous Qdrant call in thread pool to avoid blocking event loop
+        await asyncio.to_thread(
+            qdrant.set_payload,
             collection_name=collection,
             payload=payload,
             points=[point_id]

@@ -72,11 +72,12 @@ async def upsert_document(
     async with driver.session() as session:
         await session.run("""
             MERGE (d:Document {id: $id})
+            ON CREATE SET d.ingestedAt = datetime()
             SET d.docType = $docType,
                 d.source = $source,
                 d.collection = $collection,
                 d.summary = $summary,
-                d.ingestedAt = datetime()
+                d.lastSeen = datetime()
         """, id=doc_id, docType=doc_type, source=source, collection=collection, summary=summary)
 
 
@@ -131,16 +132,22 @@ async def get_entity_neighborhood(name: str, depth: int = 2) -> Dict:
     Returns:
         Dictionary with entity info, connections, and related documents
     """
+    # Validate depth before embedding it into the Cypher query
+    if not isinstance(depth, int) or depth < 1:
+        raise ValueError(f"depth must be a positive integer, got {depth!r}")
+    
     driver = get_driver()
     async with driver.session() as session:
-        result = await session.run("""
-            MATCH (e:Entity {name: $name})
-            OPTIONAL MATCH path = (e)-[r:RELATES_TO*1..$depth]-(connected:Entity)
+        # Build query with validated depth parameter
+        query = f"""
+            MATCH (e:Entity {{name: $name}})
+            OPTIONAL MATCH path = (e)-[r:RELATES_TO*1..{depth}]-(connected:Entity)
             OPTIONAL MATCH (d:Document)-[:MENTIONS]->(e)
             RETURN e,
                    collect(DISTINCT connected) as connections,
                    collect(DISTINCT d) as documents
-        """, name=name, depth=depth)
+        """
+        result = await session.run(query, name=name)
         
         record = await result.single()
         if not record:
