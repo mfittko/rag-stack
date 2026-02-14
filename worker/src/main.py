@@ -73,12 +73,11 @@ async def process_task_with_retry(redis_client: aioredis.Redis, task: dict) -> N
             logger.error(f"Task {task_id} moved to dead-letter queue after {MAX_RETRIES} attempts")
 
 
-async def worker_task(redis_client: aioredis.Redis, semaphore: asyncio.Semaphore) -> None:
-    """Worker task that processes items from the queue with concurrency control.
+async def worker_task(redis_client: aioredis.Redis) -> None:
+    """Worker task that processes items from the queue.
     
     Args:
         redis_client: Redis client
-        semaphore: Semaphore for concurrency control
     """
     while True:
         try:
@@ -86,10 +85,8 @@ async def worker_task(redis_client: aioredis.Redis, semaphore: asyncio.Semaphore
             _, raw = await redis_client.brpop(QUEUE_NAME)
             task = json.loads(raw)
             
-            # Acquire semaphore to limit concurrency
-            async with semaphore:
-                # Process the task - backoff sleep happens inside semaphore to avoid tight Redis loop
-                await process_task_with_retry(redis_client, task)
+            # Process the task
+            await process_task_with_retry(redis_client, task)
                 
         except Exception as e:
             logger.error(f"Error in worker task: {e}", exc_info=True)
