@@ -50,16 +50,18 @@ export interface EntityDetails {
   connections: EntityConnection[];
 }
 
+const DEFAULT_DEPTH = 2;
+const MAX_DEPTH = 10;
+
 export async function expandEntities(
   entityNames: string[],
-  depth = 2,
+  depth = DEFAULT_DEPTH,
 ): Promise<Entity[]> {
   const d = getDriver();
   if (!d || entityNames.length === 0) return [];
 
   // Sanitize depth: ensure it is a positive integer within a reasonable upper bound.
-  const MAX_DEPTH = 10;
-  const normalizedDepth = Number.isInteger(depth) ? depth : 2;
+  const normalizedDepth = Number.isInteger(depth) ? depth : DEFAULT_DEPTH;
   const safeDepth = Math.min(Math.max(normalizedDepth, 1), MAX_DEPTH);
 
   const session = d.session();

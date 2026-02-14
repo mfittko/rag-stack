@@ -39,13 +39,13 @@ export async function getPointsByBaseId(
   // Note: Qdrant doesn't support prefix matching in filters, so we fetch
   // all pages and filter in-memory.
   const matchingPoints: Array<{ id: string; payload: Record<string, unknown> | undefined }> = [];
-  let offset: string | number | Record<string, unknown> | null | undefined = undefined;
+  let nextPageOffset: string | number | Record<string, unknown> | null | undefined = undefined;
 
   do {
     const page = await qdrant.scroll(collection, {
       limit: 1000,
       // Qdrant expects `offset` for pagination; omit it on the first call
-      ...(offset !== undefined && offset !== null ? { offset } : {}),
+      ...(nextPageOffset !== undefined && nextPageOffset !== null ? { offset: nextPageOffset } : {}),
     });
 
     for (const p of page.points) {
@@ -58,8 +58,8 @@ export async function getPointsByBaseId(
       }
     }
 
-    offset = page.next_page_offset ?? null;
-  } while (offset !== undefined && offset !== null);
+    nextPageOffset = page.next_page_offset ?? null;
+  } while (nextPageOffset !== undefined && nextPageOffset !== null);
 
   return matchingPoints;
 }
