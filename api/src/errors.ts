@@ -17,13 +17,15 @@ export function registerErrorHandler(app: FastifyInstance): void {
       }
 
       // Upstream service errors (Ollama, Qdrant) — surface as 502
+      // Log full upstream error details server-side, but do not expose them to the client
       const upstreamError = error as FastifyError & { code?: string };
       if (
         upstreamError.code === "UPSTREAM_SERVICE_ERROR" ||
         upstreamError.name === "UpstreamServiceError"
       ) {
+        app.log.error(upstreamError);
         return reply.code(502).send({
-          error: `Upstream service error: ${error.message}`,
+          error: "Upstream service error",
         });
       }
 

@@ -12,8 +12,8 @@ export const ingestSchema = {
           required: ["text", "source"],
           properties: {
             id: { type: "string" as const },
-            text: { type: "string" as const, minLength: 1 },
-            source: { type: "string" as const, minLength: 1 },
+            text: { type: "string" as const, minLength: 1, pattern: "\\S" },
+            source: { type: "string" as const, minLength: 1, pattern: "\\S" },
             metadata: { type: "object" as const },
           },
         },
@@ -28,7 +28,7 @@ export const querySchema = {
     required: ["query"],
     properties: {
       collection: { type: "string" as const },
-      query: { type: "string" as const, minLength: 1 },
+      query: { type: "string" as const, minLength: 1, pattern: "\\S" },
       topK: { type: "integer" as const, minimum: 1, maximum: 100 },
       filter: { type: "object" as const },
     },

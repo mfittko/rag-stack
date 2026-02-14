@@ -9,4 +9,5 @@ const vitestConfig = defineConfig({
   },
 });
 
+export const VITEST_CONFIG = vitestConfig;
 export default vitestConfig;

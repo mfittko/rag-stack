@@ -34,7 +34,7 @@ describe("registerErrorHandler", () => {
   });
 
   it("returns 502 for upstream service errors with UPSTREAM_SERVICE_ERROR code", async () => {
-    const app = Fastify();
+    const app = Fastify({ logger: false }); // Disable logging for test
     registerErrorHandler(app);
     app.get("/test", async () => {
       const err = new Error("Ollama connection refused") as Error & { code: string };
@@ -50,13 +50,13 @@ describe("registerErrorHandler", () => {
     expect(res.statusCode).toBe(502);
     const body = res.json();
     expect(body).toEqual({
-      error: "Upstream service error: Ollama connection refused",
+      error: "Upstream service error",
     });
     await app.close();
   });
 
   it("returns 502 for upstream service errors with UpstreamServiceError name", async () => {
-    const app = Fastify();
+    const app = Fastify({ logger: false }); // Disable logging for test
     registerErrorHandler(app);
     app.get("/test", async () => {
       const err = new Error("Qdrant unavailable");
@@ -72,7 +72,7 @@ describe("registerErrorHandler", () => {
     expect(res.statusCode).toBe(502);
     const body = res.json();
     expect(body).toEqual({
-      error: "Upstream service error: Qdrant unavailable",
+      error: "Upstream service error",
     });
     await app.close();
   });

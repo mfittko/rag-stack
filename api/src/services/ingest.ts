@@ -70,10 +70,10 @@ export async function ingest(
       id: `${info.baseId}:${info.chunkIndex}`,
       vector: vectors[i],
       payload: {
+        ...(info.metadata ?? {}),
         text: allChunks[i],
         source: info.source,
         chunkIndex: info.chunkIndex,
-        ...(info.metadata ?? {}),
       },
     });
   }

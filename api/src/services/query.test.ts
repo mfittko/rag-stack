@@ -61,7 +61,7 @@ describe("query service", () => {
     await query(request, deps);
 
     // searchMock called with (collection, vector, limit, filter)
-    expect(searchMock.mock.calls[0][2]).toBe(8);
+    expect((searchMock.mock.calls[0] as any)?.[2]).toBe(8);
   });
 
   it("uses custom topK when specified", async () => {
@@ -74,7 +74,7 @@ describe("query service", () => {
 
     await query(request, deps);
 
-    expect(searchMock.mock.calls[0][2]).toBe(5);
+    expect((searchMock.mock.calls[0] as any)?.[2]).toBe(5);
   });
 
   it("passes filter to search", async () => {
@@ -88,7 +88,7 @@ describe("query service", () => {
 
     await query(request, deps);
 
-    expect(searchMock.mock.calls[0][3]).toBe(filter);
+    expect((searchMock.mock.calls[0] as any)?.[3]).toBe(filter);
   });
 
   it("returns results with correct structure", async () => {

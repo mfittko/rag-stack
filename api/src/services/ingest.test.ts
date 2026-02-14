@@ -92,8 +92,9 @@ describe("ingest service", () => {
 
     await ingest(request, deps);
 
-    const points = upsertMock.mock.calls[0][1];
+    const points = (upsertMock.mock.calls[0] as any)[1];
     // Should have a UUID-like format: <uuid>:0
+    expect(points).toBeDefined();
     expect(points[0].id).toMatch(/^.+:0$/);
     expect(points[0].id.length).toBeGreaterThan(3);
   });
@@ -136,7 +137,8 @@ describe("ingest service", () => {
     // doc-a should produce multiple chunks, doc-b should produce 1
     expect(result.upserted).toBeGreaterThan(2);
 
-    const points = upsertMock.mock.calls[0][1];
+    const points = (upsertMock.mock.calls[0] as any)[1];
+    expect(points).toBeDefined();
     // Verify chunk indices are sequential per document
     const docAPoints = points.filter((p: { id: string }) => p.id.startsWith("doc-a:"));
     for (let i = 0; i < docAPoints.length; i++) {
@@ -160,15 +162,16 @@ describe("ingest service", () => {
 
     await ingest(request, deps);
 
-    const points = upsertMock.mock.calls[0][1];
+    const points = (upsertMock.mock.calls[0] as any)[1];
+    expect(points).toBeDefined();
     expect(points[0].payload).toEqual({
-      text: "hello",
-      source: "test.txt",
-      chunkIndex: 0,
       repoId: "my-repo",
       path: "src/test.txt",
       lang: "ts",
       bytes: 100,
+      text: "hello",
+      source: "test.txt",
+      chunkIndex: 0,
     });
   });
 });

@@ -138,7 +138,7 @@ describe("API integration tests", () => {
       });
 
       expect(res.statusCode).toBe(502);
-      expect(res.json().error).toContain("Upstream service error");
+      expect(res.json().error).toBe("Upstream service error");
       await app.close();
     });
   });
