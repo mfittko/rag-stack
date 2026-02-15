@@ -1,6 +1,6 @@
 # rag-stack
 
-A vector-first knowledge base for AI agents — ingest any text (code, docs, articles, transcripts, notes), embed it locally, and retrieve relevant context via semantic search, with graph traversal planned on the roadmap.
+A vector-first knowledge base for AI agents — ingest any text (code, docs, articles, transcripts, notes), embed it locally, and retrieve relevant context via semantic search and knowledge graph traversal.
 
 ```mermaid
 graph LR
@@ -8,10 +8,19 @@ graph LR
     CLI -->|HTTP| API[RAG API]
     API -->|embed| Ollama
     API -->|search| Qdrant
+    API -->|graph expand| Neo4j
+    API -->|enqueue| Redis
+    Worker -->|process| Redis
+    Worker -->|extract| Neo4j
+    Worker -->|update| Qdrant
+    Worker -->|extract (tier-3)| Ollama
 
     style API fill:#e1f5fe
     style Qdrant fill:#f3e5f5
     style Ollama fill:#e8f5e9
+    style Neo4j fill:#fce4ec
+    style Redis fill:#fff9c4
+    style Worker fill:#e0f2f1
 ```
 
 ## What It Does
@@ -21,13 +30,16 @@ graph LR
 3. **Store** embeddings in Qdrant (vector DB)
 4. **Query** by natural language — semantic similarity search for context-rich results
 
-AI agents (Claude Code, OpenClaw, or any HTTP/CLI-capable agent) use this to retrieve grounded context without stuffing entire knowledge bases into their context window. Vector search finds *what's relevant* today; graph relationships are planned in the roadmap.
+AI agents (Claude Code, OpenClaw, or any HTTP/CLI-capable agent) use this to retrieve grounded context without stuffing entire knowledge bases into their context window. Vector search finds *what's relevant*; knowledge graph traversal finds *what's connected*.
 
 ## Quickstart
 
 ```bash
-# Start the stack
+# Start the base stack (Qdrant, Ollama, API)
 docker compose up -d
+
+# Or start with enrichment and knowledge graph
+docker compose --profile enrichment up -d
 
 # Pull the embedding model (first time only)
 curl http://localhost:11434/api/pull -d '{"name":"nomic-embed-text"}'
@@ -81,9 +93,12 @@ node dist/index.js query \
 
 | Component | Role | Tech |
 |-----------|------|------|
-| **RAG API** | Chunk, embed, store, search | Fastify, Node.js |
+| **RAG API** | Chunk, embed, store, search, orchestrate enrichment | Fastify, Node.js |
 | **Qdrant** | Vector storage and similarity search | Qdrant v1.10 |
-| **Ollama** | Local embedding model runtime | nomic-embed-text (768d) |
+| **Ollama** | Local embedding and LLM runtime | nomic-embed-text (768d), llama3, llava |
+| **Redis** | Enrichment task queue *(optional)* | Redis 7 |
+| **Neo4j** | Knowledge graph storage *(optional)* | Neo4j 5 Community |
+| **Enrichment Worker** | Async metadata extraction *(optional)* | Python, spaCy, asyncio |
 | **CLI** | Bulk-index Git repos and query from terminal | Node.js, TypeScript |
 | **Helm Chart** | Kubernetes deployment | Helm 3 |
 

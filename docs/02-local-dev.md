@@ -11,6 +11,9 @@ sequenceDiagram
     participant QD as Qdrant
     participant OL as Ollama
     participant API as RAG API
+    participant RD as Redis
+    participant NEO as Neo4j
+    participant WK as Worker
 
     U->>DC: docker compose up -d
     DC->>QD: Start (port 6333)
@@ -18,6 +21,16 @@ sequenceDiagram
     DC->>API: Start (port 8080)
     API->>QD: Connect
     API->>OL: Connect
+    
+    Note over U,WK: For enrichment stack:
+    U->>DC: docker compose --profile enrichment up -d
+    DC->>RD: Start (port 6379)
+    DC->>NEO: Start (port 7687, 7474)
+    DC->>WK: Start enrichment worker
+    API->>RD: Connect (if REDIS_URL set)
+    API->>NEO: Connect (if NEO4J_URL set)
+    WK->>RD: Poll for tasks
+    
     U->>API: curl /healthz
     API-->>U: { ok: true }
     U->>OL: Pull nomic-embed-text
@@ -26,8 +39,10 @@ sequenceDiagram
 
 ## Steps
 
+### Base Stack (Vector Search Only)
+
 ```bash
-# 1. Start all services
+# 1. Start core services (Qdrant, Ollama, API)
 docker compose up -d
 
 # 2. Verify the API is running
@@ -38,13 +53,44 @@ curl -s http://localhost:8080/healthz
 curl http://localhost:11434/api/pull -d '{"name":"nomic-embed-text"}'
 ```
 
+### Full Stack (with Enrichment & Knowledge Graph)
+
+```bash
+# 1. Start all services including Redis, Neo4j, and enrichment worker
+docker compose --profile enrichment up -d
+
+# 2. Verify the API is running
+curl -s http://localhost:8080/healthz
+# → {"ok":true}
+
+# 3. Pull the embedding model (first time only)
+curl http://localhost:11434/api/pull -d '{"name":"nomic-embed-text"}'
+
+# 4. (Optional) Pull LLM for tier-3 extraction
+curl http://localhost:11434/api/pull -d '{"name":"llama3"}'
+
+# 5. Verify enrichment is enabled
+curl -s http://localhost:8080/enrichment/stats
+# → {"queue":{"pending":0,...},"totals":{...}}
+```
+
 ## Services
+
+### Base Stack
 
 | Service | Port | Purpose |
 |---------|------|---------|
 | `api` | 8080 | RAG API (Fastify) |
 | `qdrant` | 6333 | Vector database |
 | `ollama` | 11434 | Embedding model runtime |
+
+### Enrichment Stack (--profile enrichment)
+
+| Service | Port | Purpose |
+|---------|------|---------|
+| `redis` | 6379 | Task queue for async enrichment |
+| `neo4j` | 7474 (HTTP), 7687 (Bolt) | Knowledge graph database |
+| `enrichment-worker` | - | Python enrichment worker (background service) |
 
 ## Optional: Enable Auth Locally
 
@@ -56,6 +102,36 @@ environment:
 ```
 
 Then pass `--token my-dev-token` to CLI commands (or set `RAG_API_TOKEN` env var).
+
+## Optional: Configure Enrichment
+
+Enrichment is enabled via Docker Compose profiles. To customize enrichment behavior, set environment variables in `docker-compose.yml`:
+
+**API service:**
+```yaml
+environment:
+  ENRICHMENT_ENABLED: "true"  # Enable enrichment features
+  REDIS_URL: "redis://redis:6379"  # Task queue (must be set manually)
+  NEO4J_URL: "bolt://neo4j:7687"  # Knowledge graph (must be set manually)
+  NEO4J_USER: "neo4j"
+  NEO4J_PASSWORD: ""  # Default docker-compose uses NEO4J_AUTH=none
+```
+
+**Worker service:**
+```yaml
+environment:
+  REDIS_URL: "redis://redis:6379"
+  QDRANT_URL: "http://qdrant:6333"
+  OLLAMA_URL: "http://ollama:11434"
+  NEO4J_URL: "bolt://neo4j:7687"
+  NEO4J_USER: "neo4j"
+  NEO4J_PASSWORD: "password"
+  WORKER_CONCURRENCY: "4"  # Number of concurrent tasks
+  EXTRACTOR_PROVIDER: "ollama"  # Options: ollama, anthropic, openai
+  EXTRACTOR_MODEL_FAST: "llama3"  # Fast model for quick extraction
+  EXTRACTOR_MODEL_CAPABLE: "llama3"  # Capable model for complex extraction
+  EXTRACTOR_MODEL_VISION: "llava"  # Vision model for image inputs
+```
 
 ## Tear Down
 

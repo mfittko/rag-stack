@@ -14,13 +14,16 @@ flowchart TD
     Q3 -->|Yes| A3[Check if data is indexed]
     Q3 -->|No| Q4{Slow responses?}
     Q4 -->|Yes| A4[Check Ollama model loaded]
-    Q4 -->|No| A5[Check API logs]
+    Q4 -->|No| Q5{Enrichment stuck?}
+    Q5 -->|Yes| A5[Check Redis/Worker/Neo4j]
+    Q5 -->|No| A6[Check API logs]
 
     style A1 fill:#fff3e0
     style A2 fill:#fff3e0
     style A3 fill:#fff3e0
     style A4 fill:#fff3e0
     style A5 fill:#fff3e0
+    style A6 fill:#fff3e0
 ```
 
 ## 401 Unauthorized
@@ -97,3 +100,132 @@ docker compose restart api
 - Use `--maxFiles` to cap the number of files
 - Run Ollama with GPU acceleration (mount GPU in Docker Compose)
 - Increase batch size in future versions
+
+## Enrichment Not Processing
+
+**Cause:** Worker not running, Redis not connected, or tasks stuck.
+
+**Fix:**
+
+```bash
+# Check enrichment stats
+curl -s http://localhost:8080/enrichment/stats | jq .
+
+# Check worker is running
+docker compose ps enrichment-worker
+# or
+kubectl get pods -l app=worker -n rag
+
+# Check worker logs
+docker compose logs enrichment-worker --tail 50
+# or
+kubectl logs -l app=worker -n rag --tail 50
+
+# Check Redis is running
+docker compose ps redis
+# or
+kubectl get pods -l app=redis -n rag
+
+# Check Redis queue directly
+docker compose exec redis redis-cli LLEN enrichment:pending
+docker compose exec redis redis-cli LLEN enrichment:dead-letter
+
+# Restart worker if stuck
+docker compose restart enrichment-worker
+# or
+kubectl rollout restart deployment/worker -n rag
+```
+
+## Neo4j Connection Failed
+
+**Cause:** Neo4j not running, wrong credentials, or network issue.
+
+**Fix:**
+
+```bash
+# Check Neo4j is running
+docker compose ps neo4j
+# or
+kubectl get pods -l app=neo4j -n rag
+
+# Check Neo4j credentials in API config
+docker compose exec api env | grep NEO4J
+
+# Test Neo4j connection directly (default docker-compose uses auth=none)
+docker compose exec neo4j cypher-shell "MATCH (n) RETURN count(n);"
+# If auth is enabled: cypher-shell -u neo4j -p <password> "MATCH (n) RETURN count(n);"
+
+# Check Neo4j logs
+docker compose logs neo4j --tail 50
+# or
+kubectl logs -l app=neo4j -n rag --tail 50
+```
+
+## Enrichment Tasks Failing
+
+**Cause:** LLM provider issues, NLP model not loaded, or bad document format.
+
+**Fix:**
+
+```bash
+# Check dead-letter queue for failed tasks
+docker compose exec redis redis-cli LRANGE enrichment:dead-letter 0 10
+
+# Check worker logs for errors
+docker compose logs enrichment-worker --tail 100 | grep -i error
+
+# Verify extractor provider is configured
+docker compose exec enrichment-worker env | grep -E "EXTRACTOR_PROVIDER|OLLAMA_URL|ANTHROPIC_API_KEY|OPENAI_API_KEY"
+
+# If using Ollama, check LLM model is pulled
+curl -s http://localhost:11434/api/tags | jq '.models[] | select(.name | contains("llama"))'
+
+# Pull LLM model if missing
+curl http://localhost:11434/api/pull -d '{"name":"llama3"}'
+
+# Clear dead-letter queue and retry
+docker compose exec redis redis-cli DEL enrichment:dead-letter
+curl -s -X POST http://localhost:8080/enrichment/enqueue -H "Content-Type: application/json" -d '{"force":true}'
+```
+
+## Graph Query Returns 503
+
+**Cause:** Neo4j not enabled or not connected.
+
+**Fix:**
+
+```bash
+# Check if Neo4j is configured
+curl -s http://localhost:8080/enrichment/stats | jq .
+# (If Neo4j is disabled, this will return zero counts)
+
+# Verify NEO4J_URL is set in API
+docker compose exec api env | grep NEO4J_URL
+
+# Enable enrichment profile to start Neo4j
+docker compose --profile enrichment up -d
+
+# Check Neo4j browser (if exposed)
+open http://localhost:7474
+# Default docker-compose: no auth required. For production: neo4j / <your-password>
+```
+
+## Worker High Memory Usage
+
+**Cause:** Processing large documents or high concurrency.
+
+**Fix:**
+
+```bash
+# Reduce worker concurrency
+# In docker-compose.yml or Helm values:
+WORKER_CONCURRENCY: "2"  # Default is 4
+
+# Restart worker with new setting
+docker compose restart enrichment-worker
+
+# Monitor worker memory
+docker stats enrichment-worker
+# or
+kubectl top pods -l app=worker -n rag
+```
