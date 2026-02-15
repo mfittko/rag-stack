@@ -124,6 +124,7 @@ CREATE INDEX idx_documents_path ON documents (path);
 CREATE INDEX idx_documents_lang ON documents (lang);
 
 -- Keep freshness timestamps correct on update/re-ingest
+-- ingested_at is immutable and represents first ingest time only.
 CREATE FUNCTION touch_documents_timestamps()
 RETURNS trigger AS $$
 BEGIN
@@ -170,6 +171,7 @@ CREATE INDEX idx_chunks_document_id ON chunks (document_id);
 CREATE INDEX idx_chunks_enrichment_status ON chunks (enrichment_status);
 CREATE INDEX idx_chunks_repo_id ON chunks (repo_id);
 CREATE INDEX idx_chunks_path ON chunks (path);
+CREATE INDEX idx_chunks_path_prefix ON chunks (path text_pattern_ops);
 CREATE INDEX idx_chunks_lang ON chunks (lang);
 CREATE INDEX idx_chunks_doc_type ON chunks (doc_type);
 
@@ -193,6 +195,8 @@ CREATE TABLE entity_relationships (
     created_at          TIMESTAMPTZ DEFAULT now(),
     PRIMARY KEY (source_id, target_id, relationship_type)
 );
+
+CREATE INDEX idx_entity_relationships_target_id ON entity_relationships (target_id);
 
 -- Document-entity mentions (replaces Neo4j MENTIONS edges)
 -- document_id references documents.id (UUID), not the legacy base_id string.
@@ -218,6 +222,8 @@ CREATE TABLE task_queue (
     max_attempts    INT DEFAULT 3,
     -- run_after is the SQL equivalent of retryAfter in the current worker payload model
     run_after       TIMESTAMPTZ DEFAULT now(),
+    lease_expires_at TIMESTAMPTZ,
+    leased_by        TEXT,
     started_at      TIMESTAMPTZ,
     completed_at    TIMESTAMPTZ,
     error           TEXT,
@@ -227,6 +233,10 @@ CREATE TABLE task_queue (
 CREATE INDEX idx_task_queue_dequeue
     ON task_queue (queue, run_after, created_at)
     WHERE status = 'pending';
+
+CREATE INDEX idx_task_queue_stale_processing
+    ON task_queue (queue, lease_expires_at)
+    WHERE status = 'processing';
 ```
 
 ### Operation mappings
@@ -250,6 +260,7 @@ Filter translation notes used by query/scroll:
 - `lang = X` -> `chunks.lang = $1`
 - `path prefix = P` -> `chunks.path LIKE ($1 || '%')`
 - `enrichmentStatus = X` -> `chunks.enrichment_status = $1`
+- URL/fetch/extraction metadata -> `documents.metadata->>'fetchedUrl'`, `resolvedUrl`, `contentType`, `fetchStatus`, `fetchedAt`, `extractionStrategy`, `extractedTitle`
 
 Initial scope: support current CLI-compatible `must` filters for exact matches and path-prefix matching.
 
@@ -266,6 +277,19 @@ WITH next AS (
 UPDATE task_queue SET status = 'processing', started_at = now()
 FROM next WHERE task_queue.id = next.id
 RETURNING *;
+```
+
+Stale-lease recovery pattern (worker watchdog):
+
+```sql
+UPDATE task_queue
+SET status = 'pending',
+        lease_expires_at = NULL,
+        leased_by = NULL,
+        run_after = now()
+WHERE status = 'processing'
+    AND lease_expires_at IS NOT NULL
+    AND lease_expires_at < now();
 ```
 
 Worker behavior: if this returns zero rows, sleep 1 s before retrying to avoid busy-looping. Under SKIP LOCKED contention zero-row results are expected and do not indicate an error.
