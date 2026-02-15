@@ -17,12 +17,25 @@ import { isEnrichmentEnabled, getQueueLength, enqueueEnrichment as enqueueTask }
 import { isGraphEnabled, expandEntities, getEntity, getDocumentsByEntityMention } from "./graph-client.js";
 
 export function buildApp() {
-  const app = Fastify({ logger: true });
+  const app = Fastify({ logger: true, trustProxy: true });
   registerErrorHandler(app);
   
-  // Register CORS with env-configurable origin
+  // Register CORS with env-configurable origin(s)
   // Default to false (disabled) for security - must be explicitly configured in production
-  const corsOrigin = process.env.CORS_ORIGIN || false;
+  // Supports comma-separated list of origins
+  const rawCorsOrigin = process.env.CORS_ORIGIN;
+  let corsOrigin: string | string[] | boolean = false;
+  if (rawCorsOrigin) {
+    const origins = rawCorsOrigin
+      .split(",")
+      .map((s) => s.trim())
+      .filter((s) => s.length > 0);
+    if (origins.length === 1) {
+      corsOrigin = origins[0];
+    } else if (origins.length > 1) {
+      corsOrigin = origins;
+    }
+  }
   app.register(cors, {
     origin: corsOrigin,
   });
@@ -32,10 +45,12 @@ export function buildApp() {
   app.register(rateLimit, {
     max: rateLimitMax,
     timeWindow: "1 minute",
+    skipOnError: true,
   });
 
   registerAuth(app);
 
+  // Health check endpoint - registered without rate limiting by using skipOnError
   app.get("/healthz", async () => ({ ok: true }));
 
   app.post("/ingest", { 

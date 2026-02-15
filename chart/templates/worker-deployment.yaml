@@ -43,15 +43,47 @@ spec:
                 secretKeyRef:
                   name: {{ .Release.Name }}-neo4j-secret
                   key: NEO4J_AUTH
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
           livenessProbe:
             exec:
               command:
                 - python
                 - -c
-                - "import sys; sys.exit(0)"
+                - |
+                  import os
+                  import socket
+                  import sys
+
+                  def check_tcp(host, port, timeout=2):
+                      if not host or not port:
+                          return True
+                      try:
+                          port = int(port)
+                          with socket.create_connection((host, port), timeout=timeout):
+                              return True
+                      except Exception:
+                          return False
+
+                  checks = [
+                      ("REDIS", os.getenv("REDIS_HOST", "redis"), os.getenv("REDIS_PORT", "6379")),
+                      ("NEO4J", os.getenv("NEO4J_HOST", "neo4j"), os.getenv("NEO4J_PORT", "7687")),
+                      ("QDRANT", os.getenv("QDRANT_HOST", "qdrant"), os.getenv("QDRANT_PORT", "6333")),
+                  ]
+
+                  healthy = True
+                  for name, host, port in checks:
+                      if not check_tcp(host, port):
+                          healthy = False
+
+                  sys.exit(0 if healthy else 1)
             initialDelaySeconds: 30
             periodSeconds: 30
           {{- if .Values.enrichment.worker.resources }}
           resources: {{- toYaml .Values.enrichment.worker.resources | nindent 12 }}
           {{- end }}
+      volumes:
+        - name: tmp
+          emptyDir: {}
 {{- end }}

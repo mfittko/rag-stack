@@ -26,8 +26,11 @@ spec:
           securityContext:
             allowPrivilegeEscalation: false
             readOnlyRootFilesystem: false
+          env:
+            - name: OLLAMA_MODELS
+              value: "/.ollama"
           ports: [{ containerPort: 11434 }]
-          volumeMounts: [{ name: ollama, mountPath: /root/.ollama }]
+          volumeMounts: [{ name: ollama, mountPath: /.ollama }]
       volumes:
         - name: ollama
           persistentVolumeClaim: { claimName: {{ .Release.Name }}-ollama }

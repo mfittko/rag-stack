@@ -47,6 +47,12 @@ spec:
           env:
             - name: RAG_API_TOKEN
               value: "{{ default .Values.api.auth.token .Values.indexer.token }}"
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
           resources:
             {{- toYaml .Values.indexer.resources | nindent 12 }}
+      volumes:
+        - name: tmp
+          emptyDir: {}
 {{- end }}

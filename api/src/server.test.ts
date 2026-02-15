@@ -419,7 +419,7 @@ describe("API integration tests", () => {
       await app.close();
     });
 
-    it("respects CORS_ORIGIN environment variable", async () => {
+    it("respects CORS_ORIGIN environment variable with single origin", async () => {
       process.env.CORS_ORIGIN = "https://specific-domain.com";
       const { buildApp } = await import("./server.js");
       const app = buildApp();
@@ -435,6 +435,40 @@ describe("API integration tests", () => {
 
       expect(res.statusCode).toBe(204);
       expect(res.headers["access-control-allow-origin"]).toBe("https://specific-domain.com");
+      await app.close();
+    });
+
+    it("supports multiple origins via comma-separated CORS_ORIGIN", async () => {
+      process.env.CORS_ORIGIN = "https://domain1.com,https://domain2.com,https://domain3.com";
+      const { buildApp } = await import("./server.js");
+      const app = buildApp();
+
+      // Test first origin
+      const res1 = await app.inject({
+        method: "OPTIONS",
+        url: "/healthz",
+        headers: { 
+          origin: "https://domain1.com",
+          "access-control-request-method": "GET",
+        },
+      });
+
+      expect(res1.statusCode).toBe(204);
+      expect(res1.headers["access-control-allow-origin"]).toBe("https://domain1.com");
+
+      // Test second origin
+      const res2 = await app.inject({
+        method: "OPTIONS",
+        url: "/healthz",
+        headers: { 
+          origin: "https://domain2.com",
+          "access-control-request-method": "GET",
+        },
+      });
+
+      expect(res2.statusCode).toBe(204);
+      expect(res2.headers["access-control-allow-origin"]).toBe("https://domain2.com");
+
       await app.close();
     });
   });
