@@ -269,7 +269,17 @@ RETURNING *;
 
 ### Ordering
 
-This migration must land **before** Chat Phase A (#45) and Extension Phase 3 (#42).
+```
+Postgres consolidation (this)
+  ├── then #35 Config & ops (rewrite against DATABASE_URL + Postgres healthcheck)
+  ├── then #34 Worker quality (rewrite against new storage layer)
+  ├── then #45 Chat Phase A (build on Postgres)
+  └── then #42 Extension Phase 3 (POST /items = SELECT FROM documents)
+```
+
+- **This migration first.** #35 (config & ops) validates env vars like `QDRANT_URL` and adds healthchecks for Qdrant/Redis/Neo4j — all of which are deleted by this migration. Doing #35 first would be wasted work. After the migration, #35 becomes simpler: validate `DATABASE_URL` + `OLLAMA_URL`, add `pg_isready` healthcheck, warn on short API tokens.
+- **#34 (worker quality) after.** The worker's storage layer is rewritten — linting and quality improvements should target the new code.
+- **#45 and #42 after.** New features should build on Postgres, not the old stack.
 
 ---
 
