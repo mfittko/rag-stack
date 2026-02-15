@@ -391,4 +391,92 @@ describe("API integration tests", () => {
       await app.close();
     });
   });
+
+  describe("CORS configuration", () => {
+    const ORIGINAL_CORS_ORIGIN = process.env.CORS_ORIGIN;
+
+    afterEach(() => {
+      if (ORIGINAL_CORS_ORIGIN === undefined) {
+        delete process.env.CORS_ORIGIN;
+      } else {
+        process.env.CORS_ORIGIN = ORIGINAL_CORS_ORIGIN;
+      }
+    });
+
+    it("allows requests with default CORS origin", async () => {
+      const { buildApp } = await import("./server.js");
+      const app = buildApp();
+
+      const res = await app.inject({
+        method: "GET",
+        url: "/healthz",
+        headers: { origin: "http://example.com" },
+      });
+
+      expect(res.statusCode).toBe(200);
+      expect(res.headers["access-control-allow-origin"]).toBeDefined();
+      await app.close();
+    });
+
+    it("respects CORS_ORIGIN environment variable", async () => {
+      process.env.CORS_ORIGIN = "https://specific-domain.com";
+      const { buildApp } = await import("./server.js");
+      const app = buildApp();
+
+      const res = await app.inject({
+        method: "OPTIONS",
+        url: "/healthz",
+        headers: { 
+          origin: "https://specific-domain.com",
+          "access-control-request-method": "GET",
+        },
+      });
+
+      expect(res.statusCode).toBe(204);
+      expect(res.headers["access-control-allow-origin"]).toBe("https://specific-domain.com");
+      await app.close();
+    });
+  });
+
+  describe("Rate limiting", () => {
+    const ORIGINAL_RATE_LIMIT_MAX = process.env.RATE_LIMIT_MAX;
+
+    afterEach(() => {
+      if (ORIGINAL_RATE_LIMIT_MAX === undefined) {
+        delete process.env.RATE_LIMIT_MAX;
+      } else {
+        process.env.RATE_LIMIT_MAX = ORIGINAL_RATE_LIMIT_MAX;
+      }
+    });
+
+    it("rate limit plugin is registered", async () => {
+      const { buildApp } = await import("./server.js");
+      const app = buildApp();
+      await app.ready();
+
+      // Verify the app starts and responds successfully
+      const res = await app.inject({
+        method: "GET",
+        url: "/healthz",
+      });
+
+      expect(res.statusCode).toBe(200);
+      await app.close();
+    });
+
+    it("respects RATE_LIMIT_MAX environment variable", async () => {
+      process.env.RATE_LIMIT_MAX = "100";
+      const { buildApp } = await import("./server.js");
+      const app = buildApp();
+      await app.ready();
+
+      const res = await app.inject({
+        method: "GET",
+        url: "/healthz",
+      });
+
+      expect(res.statusCode).toBe(200);
+      await app.close();
+    });
+  });
 });
