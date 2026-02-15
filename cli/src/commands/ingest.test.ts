@@ -129,4 +129,100 @@ describe("ingest command", () => {
     process.exit = exitSpy;
     globalThis.fetch = fetchMock;
   });
+
+  it("should handle URL with no content ingested", async () => {
+    const mockResponse = {
+      upserted: 0,
+      errors: [],
+    };
+
+    const exitSpy = process.exit;
+    let exitCode = 0;
+    process.exit = ((code: number) => {
+      exitCode = code;
+      throw new Error("exit");
+    }) as never;
+
+    globalThis.fetch = async () => {
+      return new Response(JSON.stringify(mockResponse), {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      });
+    };
+
+    try {
+      await cmdIngest({ url: "https://example.com" });
+    } catch (e) {
+      // Expected to throw
+    }
+
+    expect(exitCode).toBe(1);
+    process.exit = exitSpy;
+    globalThis.fetch = fetchMock;
+  });
+
+  it("should handle URL with partial success", async () => {
+    const mockResponse = {
+      upserted: 2,
+      errors: [{ url: "https://example.com/page1", reason: "Failed" }],
+    };
+
+    globalThis.fetch = async () => {
+      return new Response(JSON.stringify(mockResponse), {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      });
+    };
+
+    await cmdIngest({ url: "https://example.com" });
+
+    globalThis.fetch = fetchMock;
+  });
+
+  it("should handle fetch errors for URL ingestion", async () => {
+    const exitSpy = process.exit;
+    let exitCode = 0;
+    process.exit = ((code: number) => {
+      exitCode = code;
+      throw new Error("exit");
+    }) as never;
+
+    globalThis.fetch = async () => {
+      throw new Error("Network error");
+    };
+
+    try {
+      await cmdIngest({ url: "https://example.com" });
+    } catch (e) {
+      // Expected to throw
+    }
+
+    expect(exitCode).toBe(1);
+    process.exit = exitSpy;
+    globalThis.fetch = fetchMock;
+  });
+
+  it("should ingest URL with enrich disabled", async () => {
+    const mockResponse = {
+      upserted: 1,
+      errors: [],
+    };
+
+    globalThis.fetch = async (url: string | URL | Request, init?: RequestInit) => {
+      const body = JSON.parse(init?.body as string);
+      expect(body.enrich).toBe(false);
+      
+      return new Response(JSON.stringify(mockResponse), {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      });
+    };
+
+    await cmdIngest({
+      url: "https://example.com",
+      enrich: false,
+    });
+
+    globalThis.fetch = fetchMock;
+  });
 });
