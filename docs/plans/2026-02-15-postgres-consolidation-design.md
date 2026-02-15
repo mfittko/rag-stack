@@ -85,7 +85,8 @@ CREATE EXTENSION IF NOT EXISTS pgcrypto;
 -- Documents (new first-class concept, currently implicit via baseId)
 CREATE TABLE documents (
     id            UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    -- Legacy identifier kept for compatibility with /enrichment/:baseId lookups
+    -- Legacy identifier kept for compatibility with /enrichment/:baseId lookups.
+    -- Nullable: new documents created after the migration do not need a base_id.
     base_id       TEXT UNIQUE,
     -- Natural identity key for idempotent re-ingest (derived from canonical source path/URL)
     identity_key  TEXT NOT NULL,
@@ -262,14 +263,14 @@ FROM next WHERE task_queue.id = next.id
 RETURNING *;
 ```
 
-Worker behavior: if this returns zero rows, the worker loop immediately retries; this is expected under SKIP LOCKED contention.
+Worker behavior: if this returns zero rows, sleep 1 s before retrying to avoid busy-looping. Under SKIP LOCKED contention zero-row results are expected and do not indicate an error.
 
 ### Blob storage behavior
 
 - Files with size `<= BLOB_STORE_THRESHOLD_BYTES` stay in Postgres-only flow.
 - Files with size `> BLOB_STORE_THRESHOLD_BYTES` store raw content in MinIO with key `documents/{documents.id}/raw` (or extension variant) and persist key/size in `documents.raw_key` and `documents.raw_bytes`.
 - Deleting a document must first delete its blob object (if present), then delete the `documents` row.
-- A periodic orphan cleanup job can remove MinIO objects with no matching `documents.raw_key`.
+- A periodic orphan cleanup job can remove MinIO objects with no matching `documents.raw_key`. Frequency and mechanism are implementation details — a daily cron or CLI subcommand is sufficient.
 
 ---
 
@@ -317,7 +318,7 @@ Worker behavior: if this returns zero rows, the worker loop immediately retries;
 
 | Component | Remove | Add |
 |-----------|--------|-----|
-| API (npm) | `@qdrant/js-client-rest`, `redis`, `neo4j-driver` | `pg` |
+| API (npm) | `@qdrant/js-client-rest`, `redis`, `neo4j-driver` | `pg`, `pgvector` (registers vector type with `pg` driver) |
 | Worker (pip) | `qdrant-client`, `redis`, `neo4j` | `asyncpg`, `pgvector` (PyPI package) |
 
 ### Affected GitHub issues
@@ -360,7 +361,7 @@ Postgres consolidation (this)
 | Task queue | SKIP LOCKED polling | Atomic dequeue, no new dependency |
 | Blob storage | MinIO opt-in | S3-compatible, local-first, large files only |
 | Documents table | New first-class concept | Enables browse, raw file tracking, document metadata |
-| DB client (API) | `pg` + `pgvector` | Lightweight, no ORM |
+| DB client (API) | `pg` + `pgvector/pg` | Lightweight, no ORM; `pgvector/pg` registers the vector type with the `pg` driver |
 | DB client (Worker) | `asyncpg` + `pgvector` | Async-native, works with asyncio loop |
 | Schema migrations | SQL files in `api/migrations/` | Version-controlled, run on startup |
 | Graph always on | Remove `isGraphEnabled()` gate | Graph is just tables — no reason to gate |
