@@ -98,6 +98,7 @@ spec:
 
                   def check_tcp(host, port, timeout=2):
                       if not host or not port:
+                          # Fail fast if configuration is missing or incomplete (pod not ready)
                           return False
                       try:
                           port = int(port)
