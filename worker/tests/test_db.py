@@ -18,6 +18,7 @@ from src.db import (
     update_chunk_tier2,
     update_chunk_tier3,
     update_document_summary,
+    update_entity_mention_counts,
     upsert_entity,
 )
 
@@ -213,8 +214,8 @@ async def test_add_document_mention(mock_pool):
     with patch("src.db.get_pool", return_value=pool):
         await add_document_mention("doc-uuid-1", "entity-uuid-1")
 
-        # Should execute twice: insert mention + update count
-        assert conn.execute.call_count == 2
+        # Should execute once: insert mention (no longer updates count)
+        assert conn.execute.call_count == 1
 
 
 @pytest.mark.asyncio
@@ -255,6 +256,32 @@ async def test_update_document_summary(mock_pool):
         await update_document_summary("doc-uuid-1", "Test summary")
 
         assert conn.execute.called
+
+
+@pytest.mark.asyncio
+async def test_update_entity_mention_counts(mock_pool):
+    """Test bulk updating entity mention counts."""
+    pool, conn = mock_pool
+
+    with patch("src.db.get_pool", return_value=pool):
+        await update_entity_mention_counts(["entity-uuid-1", "entity-uuid-2"])
+
+        assert conn.execute.called
+        call_args = conn.execute.call_args[0]
+        assert "UPDATE entities" in call_args[0]
+        assert "WHERE id = ANY($1)" in call_args[0]
+
+
+@pytest.mark.asyncio
+async def test_update_entity_mention_counts_empty_list(mock_pool):
+    """Test bulk update with empty list does nothing."""
+    pool, conn = mock_pool
+
+    with patch("src.db.get_pool", return_value=pool):
+        await update_entity_mention_counts([])
+
+        # Should not execute any queries
+        assert not conn.execute.called
 
 
 @pytest.mark.asyncio

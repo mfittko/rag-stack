@@ -296,6 +296,9 @@ async def get_chunks_text(document_id: str, total_chunks: int) -> list[str]:
 async def upsert_entity(name: str, entity_type: str, description: str = "") -> str:
     """Create or update an entity.
 
+    Non-destructive upsert: only updates type/description when incoming values
+    are non-empty and not 'unknown'.
+
     Args:
         name: Entity name
         entity_type: Entity type
@@ -310,9 +313,19 @@ async def upsert_entity(name: str, entity_type: str, description: str = "") -> s
         INSERT INTO entities (name, type, description)
         VALUES ($1, $2, $3)
         ON CONFLICT (name) DO UPDATE
-        SET type = EXCLUDED.type,
-            description = EXCLUDED.description,
-            last_seen = now()
+        SET type = CASE 
+            WHEN EXCLUDED.type IS NOT NULL 
+                 AND EXCLUDED.type != '' 
+                 AND EXCLUDED.type != 'unknown' 
+            THEN EXCLUDED.type 
+            ELSE entities.type 
+        END,
+        description = CASE 
+            WHEN EXCLUDED.description IS NOT NULL AND EXCLUDED.description != '' 
+            THEN EXCLUDED.description 
+            ELSE entities.description 
+        END,
+        last_seen = now()
         RETURNING id
     """
 
@@ -330,7 +343,7 @@ async def add_document_mention(document_id: str, entity_id: str) -> None:
     """
     pool = await get_pool()
 
-    # Insert or increment mention count
+    # Insert or increment mention count (no global count update here to avoid N+1)
     query = """
         INSERT INTO document_entity_mentions (document_id, entity_id, mention_count)
         VALUES ($1, $2, 1)
@@ -341,17 +354,34 @@ async def add_document_mention(document_id: str, entity_id: str) -> None:
     async with pool.acquire() as conn:
         await conn.execute(query, document_id, entity_id)
 
-        # Update global mention count on entity
-        update_count_query = """
-            UPDATE entities
-            SET mention_count = (
-                SELECT COUNT(DISTINCT document_id)
-                FROM document_entity_mentions
-                WHERE entity_id = $1
-            )
-            WHERE id = $1
-        """
-        await conn.execute(update_count_query, entity_id)
+
+async def update_entity_mention_counts(entity_ids: list[str]) -> None:
+    """Update global mention counts for multiple entities in bulk.
+
+    This should be called once after all mentions for a document are written
+    to avoid N+1 query patterns.
+
+    Args:
+        entity_ids: List of entity UUIDs to update
+    """
+    if not entity_ids:
+        return
+
+    pool = await get_pool()
+
+    # Bulk update mention counts for all provided entity IDs
+    query = """
+        UPDATE entities
+        SET mention_count = (
+            SELECT COUNT(DISTINCT document_id)
+            FROM document_entity_mentions
+            WHERE entity_id = entities.id
+        )
+        WHERE id = ANY($1)
+    """
+
+    async with pool.acquire() as conn:
+        await conn.execute(query, entity_ids)
 
 
 async def add_entity_relationship(
