@@ -75,11 +75,9 @@ spec:
                   checks.append(("REDIS", os.getenv("REDIS_HOST", "redis"), os.getenv("REDIS_PORT", "6379")))
                   {{- end }}
                   
-                  # Neo4j is optional - only check if neo4j or enrichment is enabled
+                  # Neo4j is optional - only check if explicitly enabled
                   {{- if or .Values.neo4j.enabled .Values.enrichment.enabled }}
-                  neo4j_url = os.getenv("NEO4J_URL", "")
-                  if neo4j_url and "neo4j" in neo4j_url.lower():
-                      checks.append(("NEO4J", os.getenv("NEO4J_HOST", "neo4j"), os.getenv("NEO4J_PORT", "7687")))
+                  checks.append(("NEO4J", os.getenv("NEO4J_HOST", "neo4j"), os.getenv("NEO4J_PORT", "7687")))
                   {{- end }}
                   
                   # Qdrant is always required
