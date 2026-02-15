@@ -1,4 +1,5 @@
 import { promises as dns } from "node:dns";
+import { isIP } from "node:net";
 
 export class SsrfError extends Error {
   constructor(message: string) {
@@ -170,17 +171,9 @@ export async function validateUrl(url: string): Promise<{ hostname: string; reso
   // For IPv6 addresses, the hostname will have brackets which we need to strip for validation
   let ipToValidate = hostname;
   
-  // Check if it's an IPv4 address (strict format check)
-  const isIpv4 = /^\d+\.\d+\.\d+\.\d+$/.test(hostname);
-  
-  // Check if it's an IPv6 address with more robust validation
-  // IPv6 addresses contain colons and valid hex characters
-  // Must not be a port number (which would be after a single colon at the end)
-  const isIpv6 = hostname.includes(":") && 
-                 /^[0-9a-fA-F:]+$/.test(hostname) &&
-                 hostname.split(":").length > 2; // IPv6 has multiple colons
-  
-  if (isIpv4 || isIpv6) {
+  const ipVersion = isIP(hostname);
+
+  if (ipVersion !== 0) {
     if (isPrivateIp(ipToValidate)) {
       throw new SsrfError(`Private IP address not allowed: ${ipToValidate}`);
     }

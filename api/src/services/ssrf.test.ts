@@ -33,6 +33,39 @@ describe("SSRF guard", () => {
       await expect(validateUrl("http://192.168.255.255/")).rejects.toThrow(SsrfError);
     });
 
+    it("enforces 192.168.x.x boundaries correctly", async () => {
+      // 192.167.x.x should be allowed (just before 192.168.0.0)
+      const beforeRange = await validateUrl("http://192.167.255.255/");
+      expect(beforeRange.hostname).toBe("192.167.255.255");
+
+      // 192.168.x.x should be blocked (inside range)
+      await expect(validateUrl("http://192.168.0.0/")).rejects.toThrow(SsrfError);
+      await expect(validateUrl("http://192.168.128.1/")).rejects.toThrow(SsrfError);
+
+      // 192.169.x.x should be allowed (just after 192.168.255.255)
+      const afterRange = await validateUrl("http://192.169.0.0/");
+      expect(afterRange.hostname).toBe("192.169.0.0");
+    });
+
+    it("enforces 172.16.0.0/12 boundaries and nearby public ranges", async () => {
+      // Exact boundaries should be blocked
+      await expect(validateUrl("http://172.16.0.0/")).rejects.toThrow(SsrfError);
+      await expect(validateUrl("http://172.31.255.255/")).rejects.toThrow(SsrfError);
+
+      // Middle of range should be blocked
+      await expect(validateUrl("http://172.20.10.5/")).rejects.toThrow(SsrfError);
+
+      // Nearby public ranges should be allowed
+      const lowerPublic = await validateUrl("http://172.15.255.255/");
+      expect(lowerPublic.hostname).toBe("172.15.255.255");
+
+      const upperPublic = await validateUrl("http://172.32.0.0/");
+      expect(upperPublic.hostname).toBe("172.32.0.0");
+
+      const unrelatedPublic = await validateUrl("http://173.0.0.1/");
+      expect(unrelatedPublic.hostname).toBe("173.0.0.1");
+    });
+
     it("blocks 0.0.0.0", async () => {
       await expect(validateUrl("http://0.0.0.0/")).rejects.toThrow(SsrfError);
     });
