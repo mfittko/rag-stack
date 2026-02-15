@@ -918,7 +918,7 @@ describe("ingest integration tests", () => {
       await app.close();
     });
 
-    it("URL with query parameters and fragment → preserved in source", async () => {
+    it("URL with query parameters and fragment → stripped from source", async () => {
       const urlWithParams = "https://example.com/article?id=123&lang=en#section-2";
 
       mockFetchUrls.mockResolvedValue({
