@@ -25,7 +25,6 @@ type IngestItem = {
   source?: string; 
   metadata?: Record<string, any>;
   docType?: string;
-  enrich?: boolean;
 };
 
 function normalizePathForId(filePath: string): string {
@@ -172,11 +171,14 @@ function authHeaders(token?: string): Record<string, string> {
   return { authorization: `Bearer ${t}` };
 }
 
-async function ingest(api: string, collection: string, items: IngestItem[], token?: string) {
+async function ingest(api: string, collection: string, items: IngestItem[], token?: string, enrich?: boolean) {
+  const body: { collection: string; items: IngestItem[]; enrich?: boolean } = { collection, items };
+  if (enrich !== undefined) body.enrich = enrich;
+  
   const res = await fetch(`${api.replace(/\/$/, "")}/ingest`, {
     method: "POST",
     headers: { "content-type": "application/json", ...authHeaders(token) },
-    body: JSON.stringify({ collection, items }),
+    body: JSON.stringify(body),
   });
   if (!res.ok) throw new Error(`Ingest failed: ${res.status} ${await res.text()}`);
   return await res.json();
@@ -257,19 +259,18 @@ async function cmdIndex(options: any) {
       };
       
       if (docType) item.docType = docType;
-      if (enrich !== undefined) item.enrich = enrich;
       
       items.push(item);
 
       if (items.length >= 50) {
         console.log(`[rag-index] Ingesting batch (${items.length})...`);
-        await ingest(api, collection, items.splice(0, items.length), token);
+        await ingest(api, collection, items.splice(0, items.length), token, enrich);
       }
     }
 
     if (items.length) {
       console.log(`[rag-index] Ingesting final batch (${items.length})...`);
-      await ingest(api, collection, items, token);
+      await ingest(api, collection, items, token, enrich);
     }
     console.log(`[rag-index] Done. repoId=${repoId}`);
   } finally {
@@ -333,15 +334,19 @@ async function cmdIngest(options: any) {
   // Handle URL ingestion
   if (url) {
     console.log(`Fetching ${url} ...`);
-    const item: IngestItem = { url, enrich };
+    const item: IngestItem = { url };
     if (docTypeOverride) item.docType = docTypeOverride;
 
     try {
-      const result = await ingest(api, collection, [item], token);
+      const result = await ingest(api, collection, [item], token, enrich);
       
       if (result.errors && result.errors.length > 0) {
         for (const err of result.errors) {
           console.error(`✗ Failed to ingest ${err.url} — ${err.reason}`);
+        }
+        // Exit with error status if ingestion failed
+        if (result.upserted === 0) {
+          process.exit(1);
         }
       }
       
@@ -352,6 +357,7 @@ async function cmdIngest(options: any) {
       
       if (result.upserted === 0 && (!result.errors || result.errors.length === 0)) {
         console.log(`✗ No content ingested from ${url}`);
+        process.exit(1);
       }
     } catch (err) {
       console.error(`✗ Failed to ingest ${url}:`, err);
@@ -403,14 +409,13 @@ async function cmdIngest(options: any) {
         source: filePath,
         metadata: { ...metadata, fileName, filePath },
         docType,
-        enrich,
       };
       
       items.push(item);
       
       if (items.length >= 10) {
         console.log(`[rag-index] Ingesting batch (${items.length})...`);
-        await ingest(api, collection, items.splice(0, items.length), token);
+        await ingest(api, collection, items.splice(0, items.length), token, enrich);
       }
     } catch (err) {
       console.error(`[rag-index] Error processing ${filePath}:`, err);
@@ -419,7 +424,7 @@ async function cmdIngest(options: any) {
 
   if (items.length) {
     console.log(`[rag-index] Ingesting final batch (${items.length})...`);
-    await ingest(api, collection, items, token);
+    await ingest(api, collection, items, token, enrich);
   }
   
   console.log(`[rag-index] Done. Processed ${filesToProcess.length} files.`);

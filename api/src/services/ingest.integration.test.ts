@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import Fastify from "fastify";
 import { registerAuth } from "../auth.js";
 import { registerErrorHandler } from "../errors.js";
@@ -70,9 +70,22 @@ function buildIntegrationTestApp(options?: {
 }
 
 describe("ingest integration tests", () => {
+  const ORIGINAL_TOKEN = process.env.RAG_API_TOKEN;
+
   beforeEach(() => {
     // Reset all mocks before each test
     vi.clearAllMocks();
+    // Clear RAG_API_TOKEN to avoid 401 errors in tests
+    delete process.env.RAG_API_TOKEN;
+  });
+
+  afterEach(() => {
+    // Restore original token
+    if (ORIGINAL_TOKEN === undefined) {
+      delete process.env.RAG_API_TOKEN;
+    } else {
+      process.env.RAG_API_TOKEN = ORIGINAL_TOKEN;
+    }
   });
 
   describe("happy path - URL ingestion", () => {
