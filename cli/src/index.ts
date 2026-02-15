@@ -114,7 +114,7 @@ function run(cmd: string, args: string[], cwd?: string): Promise<void> {
   });
 }
 
-async function listFiles(root: string): Promise<string[]> {
+async function listFiles(root: string, maxFiles?: number): Promise<string[]> {
   const out: string[] = [];
   const stack = [root];
   const ignore = new Set([".git", "node_modules", "dist", "build", "target", ".next", ".cache", "vendor"]);
@@ -125,7 +125,13 @@ async function listFiles(root: string): Promise<string[]> {
       if (ignore.has(e.name)) continue;
       const full = path.join(dir, e.name);
       if (e.isDirectory()) stack.push(full);
-      else if (e.isFile()) out.push(full);
+      else if (e.isFile()) {
+        out.push(full);
+        // Early stop if we've reached the limit
+        if (maxFiles !== undefined && out.length >= maxFiles) {
+          return out;
+        }
+      }
     }
   }
   return out;
@@ -321,11 +327,11 @@ async function cmdIngest(options: any) {
   if (file) {
     filesToProcess.push(file);
   } else if (dir) {
-    const allFiles = await listFiles(dir);
-    // Apply maxFiles limit to prevent memory issues on large directories
-    filesToProcess.push(...allFiles.slice(0, maxFiles));
-    if (allFiles.length > maxFiles) {
-      console.warn(`[rag-index] Warning: Directory contains ${allFiles.length} files, limiting to ${maxFiles} (use --maxFiles to adjust)`);
+    // Pass maxFiles to listFiles for early-stop bounded traversal
+    const allFiles = await listFiles(dir, maxFiles);
+    filesToProcess.push(...allFiles);
+    if (allFiles.length >= maxFiles) {
+      console.warn(`[rag-index] Warning: Reached file limit of ${maxFiles}, some files may be skipped (use --maxFiles to adjust)`);
     }
   }
 
@@ -388,32 +394,30 @@ async function cmdEnrich(options: any) {
   const force = Boolean(options.force);
   const statsOnly = Boolean(options.statsOnly);
 
-  if (statsOnly || !force) {
-    // Get enrichment stats (shown by default unless forcing re-enqueue)
-    const res = await fetch(`${api.replace(/\/$/, "")}/enrichment/stats`, {
-      method: "GET",
-      headers: authHeaders(token),
-    });
-    
-    if (!res.ok) {
-      console.error(`Failed to get stats: ${res.status} ${await res.text()}`);
-      process.exit(1);
-    }
-    
-    const stats = await res.json();
-    console.log("\n=== Enrichment Statistics ===");
-    console.log(`Queue:`);
-    console.log(`  Pending: ${stats.queue.pending}`);
-    console.log(`  Processing: ${stats.queue.processing}`);
-    console.log(`  Dead Letter: ${stats.queue.deadLetter}`);
-    console.log(`\nTotals:`);
-    console.log(`  Enriched: ${stats.totals.enriched}`);
-    console.log(`  Failed: ${stats.totals.failed}`);
-    console.log(`  Pending: ${stats.totals.pending}`);
-    console.log(`  Processing: ${stats.totals.processing}`);
-    console.log(`  None: ${stats.totals.none}`);
-    console.log("");
+  // Always show stats first (explicit behavior)
+  const res = await fetch(`${api.replace(/\/$/, "")}/enrichment/stats`, {
+    method: "GET",
+    headers: authHeaders(token),
+  });
+  
+  if (!res.ok) {
+    console.error(`Failed to get stats: ${res.status} ${await res.text()}`);
+    process.exit(1);
   }
+  
+  const stats = await res.json();
+  console.log("\n=== Enrichment Statistics ===");
+  console.log(`Queue:`);
+  console.log(`  Pending: ${stats.queue.pending}`);
+  console.log(`  Processing: ${stats.queue.processing}`);
+  console.log(`  Dead Letter: ${stats.queue.deadLetter}`);
+  console.log(`\nTotals:`);
+  console.log(`  Enriched: ${stats.totals.enriched}`);
+  console.log(`  Failed: ${stats.totals.failed}`);
+  console.log(`  Pending: ${stats.totals.pending}`);
+  console.log(`  Processing: ${stats.totals.processing}`);
+  console.log(`  None: ${stats.totals.none}`);
+  console.log("");
 
   if (statsOnly) {
     // Only show stats, don't enqueue
@@ -421,22 +425,22 @@ async function cmdEnrich(options: any) {
   }
 
   // Enqueue enrichment tasks
-  const res = await fetch(`${api.replace(/\/$/, "")}/enrichment/enqueue`, {
+  const enqueueRes = await fetch(`${api.replace(/\/$/, "")}/enrichment/enqueue`, {
     method: "POST",
     headers: { "content-type": "application/json", ...authHeaders(token) },
     body: JSON.stringify({ collection, force }),
   });
   
-  if (!res.ok) {
-    console.error(`Failed to enqueue: ${res.status} ${await res.text()}`);
+  if (!enqueueRes.ok) {
+    console.error(`Failed to enqueue: ${enqueueRes.status} ${await enqueueRes.text()}`);
     process.exit(1);
   }
   
-  const result = await res.json();
+  const result = await enqueueRes.json();
   if (force) {
     console.log(`[rag-index] Re-enqueued ${result.enqueued} tasks (including already-enriched items).`);
   } else {
-    console.log(`[rag-index] Enqueued ${result.enqueued} tasks for enrichment.`);
+    console.log(`[rag-index] Enqueued ${result.enqueued} pending tasks for enrichment.`);
   }
 }
 
