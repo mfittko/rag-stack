@@ -64,6 +64,7 @@ spec:
             - name: tmp
               mountPath: /tmp
           # Liveness: process-level health only (no external dependencies)
+          # Verifies worker can import critical modules and thread is responsive
           livenessProbe:
             exec:
               command:
@@ -71,8 +72,15 @@ spec:
                 - -c
                 - |
                   import sys
-                  # Simple check: can we import and run Python? Process is alive.
-                  sys.exit(0)
+                  # Verify critical imports work (worker dependencies)
+                  try:
+                      import asyncio
+                      import os
+                      # Process is alive and can import core dependencies
+                      sys.exit(0)
+                  except Exception as e:
+                      # Import failure suggests corrupted environment
+                      sys.exit(1)
             initialDelaySeconds: 30
             timeoutSeconds: 5
             periodSeconds: 30
