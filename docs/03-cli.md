@@ -72,6 +72,7 @@ node dist/index.js ingest --dir <path> [options]
 | `--api` | `http://localhost:8080` | RAG API URL |
 | `--collection` | `docs` | Qdrant collection name |
 | `--token` | _(env `RAG_API_TOKEN`)_ | Bearer token for auth |
+| `--maxFiles` | `4000` | Maximum files to process from directory |
 | `--enrich` | `true` | Enable async enrichment |
 | `--no-enrich` | - | Disable async enrichment |
 | `--doc-type` | _(auto-detect)_ | Override document type (`code`, `text`, `pdf`, `image`, `slack`) |
@@ -95,20 +96,25 @@ node dist/index.js enrich [options]
 | `--api` | `http://localhost:8080` | RAG API URL |
 | `--collection` | `docs` | Qdrant collection name |
 | `--token` | _(env `RAG_API_TOKEN`)_ | Bearer token for auth |
-| `--force` | `false` | Re-enqueue already-enriched items |
-| `--show-failed` | `false` | Show failed enrichment stats only |
-| `--retry-failed` | `false` | Retry failed enrichments |
+| `--force` | `false` | Re-enqueue all items (including already-enriched) |
+| `--stats-only` | `false` | Show enrichment stats without enqueueing |
+
+**Behavior:**
+- Always shows enrichment statistics first
+- By default, enqueues pending items after showing stats
+- Use `--stats-only` to view stats without enqueueing
+- Use `--force` to re-enqueue all items (including already-enriched)
 
 **Examples:**
 
 ```bash
-# Show enrichment stats
-node dist/index.js enrich --show-failed
+# Show enrichment stats only (no enqueueing)
+node dist/index.js enrich --stats-only
 
-# Trigger enrichment for pending items
+# Show stats and enqueue pending items (default)
 node dist/index.js enrich
 
-# Force re-enrichment of all items
+# Show stats and force re-enrichment of all items
 node dist/index.js enrich --force
 ```
 

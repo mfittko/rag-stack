@@ -1191,8 +1191,9 @@ git commit -m "feat(cli): add ingest command for arbitrary file ingestion"
 **Step 1: Implement `cmdEnrich` function**
 
 Calls `POST /enrichment/enqueue` with collection and force options.
-Calls `GET /enrichment/stats` for `--show-failed`.
-Implements `--retry-failed` (calls a new endpoint or directly manipulates via API).
+Always calls `GET /enrichment/stats` first to show enrichment statistics.
+Supports `--stats-only` to view stats without enqueueing.
+Supports `--force` to re-enqueue all items (including already-enriched).
 
 **Step 2: Commit**
 

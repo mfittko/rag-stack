@@ -436,8 +436,7 @@ rag-index ingest --file ./diagram.png
 rag-index enrich --api http://localhost:8080
 rag-index enrich --collection docs
 rag-index enrich --force
-rag-index enrich --show-failed
-rag-index enrich --retry-failed
+rag-index enrich --stats-only
 ```
 
 ### New `rag-index graph`
@@ -459,7 +458,7 @@ rag-index graph --entity "AuthService" --depth 2
 | Image too large for multimodal LLM | Resize before sending, note in metadata |
 | Unsupported document type | Fall back to generic "text" extraction |
 
-Dead letter queue: after 3 failed attempts, tasks move to `enrichment:dead-letter` in Redis. `rag-index enrich --show-failed` and `--retry-failed` for inspection and replay.
+Dead letter queue: after 3 failed attempts, tasks move to `enrichment:dead-letter` in Redis. `rag-index enrich --stats-only` shows stats for inspection.
 
 ## Observability
 
