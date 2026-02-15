@@ -94,52 +94,69 @@ export async function ingest(
       });
     }
     
-    // Extract content from successful fetches
-    for (const item of urlItems) {
-      const fetchResult = results.get(item.url!);
-      if (!fetchResult) {
-        // Already in errors
-        continue;
+    // Extract content from successful fetches with bounded concurrency
+    const MAX_CONCURRENT_EXTRACTIONS = 5;
+    const extractionPromises: Promise<void>[] = [];
+    let nextIndex = 0;
+    
+    async function processExtractionItem() {
+      while (true) {
+        const index = nextIndex++;
+        if (index >= urlItems.length) break;
+        
+        const item = urlItems[index];
+        const fetchResult = results.get(item.url!);
+        if (!fetchResult) {
+          // Already in errors
+          continue;
+        }
+        
+        // Extract text from fetched content
+        const extraction = await extractContentAsync(fetchResult.body, fetchResult.contentType);
+        
+        if (extraction.strategy === "metadata-only" || !extraction.text) {
+          // Unsupported content type - add to errors
+          fetchErrors.push({
+            url: item.url!,
+            status: fetchResult.status,
+            reason: `unsupported_content_type: ${fetchResult.contentType}`,
+          });
+          continue;
+        }
+        
+        // Success: populate text and metadata
+        item.text = extraction.text;
+        if (!item.source) {
+          item.source = toSourceFromUrl(fetchResult.resolvedUrl);
+        }
+        
+        // Add fetch metadata to item metadata
+        item.metadata = {
+          ...(item.metadata || {}),
+          fetchedUrl: fetchResult.url,
+          resolvedUrl: fetchResult.resolvedUrl,
+          contentType: fetchResult.contentType,
+          fetchStatus: fetchResult.status,
+          fetchedAt: fetchResult.fetchedAt,
+          extractionStrategy: extraction.strategy,
+        };
+        
+        if (extraction.title) {
+          item.metadata.extractedTitle = extraction.title;
+        }
+        
+        // Move to textItems for normal processing
+        textItems.push(item);
+        fetchedCount++;
       }
-      
-      // Extract text from fetched content
-      const extraction = await extractContentAsync(fetchResult.body, fetchResult.contentType);
-      
-      if (extraction.strategy === "metadata-only" || !extraction.text) {
-        // Unsupported content type - add to errors
-        fetchErrors.push({
-          url: item.url!,
-          status: fetchResult.status,
-          reason: `unsupported_content_type: ${fetchResult.contentType}`,
-        });
-        continue;
-      }
-      
-      // Success: populate text and metadata
-      item.text = extraction.text;
-      if (!item.source) {
-        item.source = toSourceFromUrl(fetchResult.resolvedUrl);
-      }
-      
-      // Add fetch metadata to item metadata
-      item.metadata = {
-        ...(item.metadata || {}),
-        fetchedUrl: fetchResult.url,
-        resolvedUrl: fetchResult.resolvedUrl,
-        contentType: fetchResult.contentType,
-        fetchStatus: fetchResult.status,
-        fetchedAt: fetchResult.fetchedAt,
-        extractionStrategy: extraction.strategy,
-      };
-      
-      if (extraction.title) {
-        item.metadata.extractedTitle = extraction.title;
-      }
-      
-      // Move to textItems for normal processing
-      textItems.push(item);
-      fetchedCount++;
     }
+    
+    // Start bounded concurrent extraction workers
+    for (let i = 0; i < Math.min(MAX_CONCURRENT_EXTRACTIONS, urlItems.length); i++) {
+      extractionPromises.push(processExtractionItem());
+    }
+    
+    await Promise.all(extractionPromises);
   }
   
   // Pre-process items to assign stable baseIds and detect metadata
@@ -155,6 +172,12 @@ export async function ingest(
   const processedItems: ProcessedItem[] = [];
   for (const item of textItems) {
     if (!item.text) {
+      // Report missing text as error instead of silently dropping
+      fetchErrors.push({
+        url: item.url || item.source || "(unknown)",
+        status: null,
+        reason: "missing_text: item has no text content",
+      });
       continue;
     }
 
@@ -163,6 +186,12 @@ export async function ingest(
     }
 
     if (!item.source) {
+      // Report missing source as error instead of silently dropping
+      fetchErrors.push({
+        url: item.url || "(unknown)",
+        status: null,
+        reason: "missing_source: item has no source identifier",
+      });
       continue;
     }
 
