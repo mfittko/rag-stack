@@ -17,7 +17,9 @@ import { isEnrichmentEnabled, getQueueLength, enqueueEnrichment as enqueueTask }
 import { isGraphEnabled, expandEntities, getEntity, getDocumentsByEntityMention } from "./graph-client.js";
 
 export function buildApp() {
-  const app = Fastify({ logger: true, trustProxy: true });
+  // Trust proxy only when explicitly enabled via env var for security
+  const trustProxy = process.env.TRUST_PROXY === "true";
+  const app = Fastify({ logger: true, trustProxy });
   registerErrorHandler(app);
   
   // Register CORS with env-configurable origin(s)
@@ -44,7 +46,9 @@ export function buildApp() {
   app.get("/healthz", async () => ({ ok: true }));
 
   // Register rate limiting with env-configurable max
-  const rateLimitMax = parseInt(process.env.RATE_LIMIT_MAX || "100", 10);
+  // Validate input to prevent NaN from malformed env values
+  const parsed = parseInt(process.env.RATE_LIMIT_MAX || "100", 10);
+  const rateLimitMax = Number.isFinite(parsed) && parsed > 0 ? parsed : 100;
   app.register(rateLimit, {
     max: rateLimitMax,
     timeWindow: "1 minute",

@@ -16,6 +16,9 @@ api:
     VECTOR_SIZE: "768"
     DISTANCE: "Cosine"
     EMBED_MODEL: "nomic-embed-text"
+    CORS_ORIGIN: ""
+    RATE_LIMIT_MAX: "100"
+    TRUST_PROXY: "false"
   auth:
     enabled: true
     token: ""

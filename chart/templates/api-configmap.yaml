@@ -12,6 +12,11 @@ data:
   DISTANCE: "{{ .Values.api.env.DISTANCE }}"
   EMBED_MODEL: "{{ .Values.api.env.EMBED_MODEL }}"
   PORT: "8080"
+  {{- if .Values.api.env.CORS_ORIGIN }}
+  CORS_ORIGIN: "{{ .Values.api.env.CORS_ORIGIN }}"
+  {{- end }}
+  RATE_LIMIT_MAX: "{{ .Values.api.env.RATE_LIMIT_MAX }}"
+  TRUST_PROXY: "{{ .Values.api.env.TRUST_PROXY }}"
   {{- if .Values.enrichment.enabled }}
   REDIS_URL: "redis://{{ .Release.Name }}-redis:{{ .Values.redis.service.port }}"
   ENRICHMENT_ENABLED: "true"

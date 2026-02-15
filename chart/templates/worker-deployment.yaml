@@ -67,11 +67,23 @@ spec:
                       except Exception:
                           return False
 
-                  checks = [
-                      ("REDIS", os.getenv("REDIS_HOST", "redis"), os.getenv("REDIS_PORT", "6379")),
-                      ("NEO4J", os.getenv("NEO4J_HOST", "neo4j"), os.getenv("NEO4J_PORT", "7687")),
-                      ("QDRANT", os.getenv("QDRANT_HOST", "qdrant"), os.getenv("QDRANT_PORT", "6333")),
-                  ]
+                  # Build checks list based on configured services
+                  checks = []
+                  
+                  # Redis is required when enrichment is enabled
+                  {{- if .Values.enrichment.enabled }}
+                  checks.append(("REDIS", os.getenv("REDIS_HOST", "redis"), os.getenv("REDIS_PORT", "6379")))
+                  {{- end }}
+                  
+                  # Neo4j is optional - only check if neo4j or enrichment is enabled
+                  {{- if or .Values.neo4j.enabled .Values.enrichment.enabled }}
+                  neo4j_url = os.getenv("NEO4J_URL", "")
+                  if neo4j_url and "neo4j" in neo4j_url.lower():
+                      checks.append(("NEO4J", os.getenv("NEO4J_HOST", "neo4j"), os.getenv("NEO4J_PORT", "7687")))
+                  {{- end }}
+                  
+                  # Qdrant is always required
+                  checks.append(("QDRANT", os.getenv("QDRANT_HOST", "qdrant"), os.getenv("QDRANT_PORT", "6333")))
 
                   healthy = True
                   for name, host, port in checks:
