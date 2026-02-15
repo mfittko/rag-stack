@@ -396,17 +396,17 @@ async function cmdEnrich(options: any) {
   const statsOnly = Boolean(options.statsOnly);
 
   // Always show stats first (explicit behavior)
-  const res = await fetch(`${apiBase}/enrichment/stats`, {
+  const statsRes = await fetch(`${apiBase}/enrichment/stats`, {
     method: "GET",
     headers: authHeaders(token),
   });
   
-  if (!res.ok) {
-    console.error(`Failed to get stats: ${res.status} ${await res.text()}`);
+  if (!statsRes.ok) {
+    console.error(`Failed to get stats: ${statsRes.status} ${await statsRes.text()}`);
     process.exit(1);
   }
   
-  const stats = await res.json();
+  const stats = await statsRes.json();
   console.log("\n=== Enrichment Statistics ===");
   console.log(`Queue:`);
   console.log(`  Pending: ${stats.queue.pending}`);
