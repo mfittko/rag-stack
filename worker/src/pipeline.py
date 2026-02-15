@@ -200,6 +200,7 @@ async def write_entities_to_db(
 
         # Create entity nodes and mentions
         entities = entity_result.get("entities", [])
+        entity_ids = []
         for entity in entities:
             entity_name = entity.get("name", "")
             entity_type = entity.get("type", "")
@@ -208,6 +209,11 @@ async def write_entities_to_db(
             if entity_name:
                 entity_id = await db.upsert_entity(entity_name, entity_type, entity_desc)
                 await db.add_document_mention(document_id, entity_id)
+                entity_ids.append(entity_id)
+
+        # Bulk update mention counts once after all mentions are written
+        if entity_ids:
+            await db.update_entity_mention_counts(entity_ids)
 
         # Create relationships between entities
         relationships = entity_result.get("relationships", [])

@@ -188,6 +188,7 @@ async def test_run_document_level_extraction():
         mock_db.update_document_summary = AsyncMock()
         mock_db.upsert_entity = AsyncMock(return_value="entity-uuid-1")
         mock_db.add_document_mention = AsyncMock()
+        mock_db.update_entity_mention_counts = AsyncMock()
 
         # Mock adapter responses
         mock_adapter.extract_metadata = AsyncMock(return_value={"summary": "Test"})
@@ -205,6 +206,7 @@ async def test_run_document_level_extraction():
         assert mock_db.update_document_summary.called
         assert mock_db.upsert_entity.called
         assert mock_db.add_document_mention.called
+        assert mock_db.update_entity_mention_counts.called
 
 
 @pytest.mark.asyncio
