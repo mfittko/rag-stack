@@ -71,6 +71,9 @@ BLOB_STORE_ACCESS_KEY=minioadmin
 BLOB_STORE_SECRET_KEY=minioadmin
 BLOB_STORE_BUCKET=rag-raw
 BLOB_STORE_THRESHOLD_BYTES=10485760
+
+# Note: VECTOR_SIZE is no longer runtime-configured in v1 of this design.
+# The schema fixes embedding dimension to 768; changing model dimension requires a DB migration.
 ```
 
 ---
@@ -248,6 +251,8 @@ Filter translation notes used by query/scroll:
 - `path prefix = P` -> `chunks.path LIKE ($1 || '%')`
 - `enrichmentStatus = X` -> `chunks.enrichment_status = $1`
 
+Initial scope: support current CLI-compatible `must` filters for exact matches and path-prefix matching.
+
 ### Worker dequeue pattern
 
 ```sql
@@ -291,7 +296,7 @@ Worker behavior: if this returns zero rows, sleep 1 s before retrying to avoid b
 - `api/src/server.ts` — Import db instead of qdrant/redis/graph-client
 - `api/src/services/ingest.ts` — Document + chunks in transaction
 - `api/src/services/query.ts` — Vector search via pgvector operator
-- `api/src/services/enrichment.ts` — Status from chunks table, queue from task_queue
+- `api/src/services/enrichment.ts` — Status from chunks table, queue from task_queue, and `GET /enrichment/:baseId` via `documents.base_id`
 
 **Worker — Delete:**
 - `worker/src/graph.py` + test — Neo4j client
@@ -318,7 +323,7 @@ Worker behavior: if this returns zero rows, sleep 1 s before retrying to avoid b
 
 | Component | Remove | Add |
 |-----------|--------|-----|
-| API (npm) | `@qdrant/js-client-rest`, `redis`, `neo4j-driver` | `pg`, `pgvector` (registers vector type with `pg` driver) |
+| API (npm) | `@qdrant/js-client-rest`, `redis`, `neo4j-driver` | `pg` (vector ops via SQL against pgvector extension) |
 | Worker (pip) | `qdrant-client`, `redis`, `neo4j` | `asyncpg`, `pgvector` (PyPI package) |
 
 ### Affected GitHub issues
@@ -361,7 +366,7 @@ Postgres consolidation (this)
 | Task queue | SKIP LOCKED polling | Atomic dequeue, no new dependency |
 | Blob storage | MinIO opt-in | S3-compatible, local-first, large files only |
 | Documents table | New first-class concept | Enables browse, raw file tracking, document metadata |
-| DB client (API) | `pg` + `pgvector/pg` | Lightweight, no ORM; `pgvector/pg` registers the vector type with the `pg` driver |
+| DB client (API) | `pg` + SQL | Lightweight, no ORM; vector operations use Postgres `pgvector` extension |
 | DB client (Worker) | `asyncpg` + `pgvector` | Async-native, works with asyncio loop |
 | Schema migrations | SQL files in `api/migrations/` | Version-controlled, run on startup |
 | Graph always on | Remove `isGraphEnabled()` gate | Graph is just tables — no reason to gate |
