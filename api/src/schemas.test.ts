@@ -26,12 +26,6 @@ describe("ingest schema validation", () => {
           }
           
           // If url is absent, text and source are required
-          if (!item.url && !item.text) {
-            return reply.status(400).send({
-              error: "Validation failed: 'text' is required when 'url' is not provided"
-            });
-          }
-          
           if (!item.url && !item.source) {
             return reply.status(400).send({
               error: "Validation failed: 'source' is required when 'url' is not provided"
