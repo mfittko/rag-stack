@@ -18,7 +18,7 @@ class Logger {
     } else {
       console.log(message);
       if (data) {
-        console.log(data);
+        console.dir(data, { depth: null, colors: true });
       }
     }
   }
@@ -31,7 +31,7 @@ class Logger {
     } else {
       console.warn(message);
       if (data) {
-        console.warn(data);
+        console.dir(data, { depth: null, colors: true });
       }
     }
   }

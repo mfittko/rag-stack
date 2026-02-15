@@ -5,18 +5,22 @@ describe("logger", () => {
   let consoleLogSpy: typeof console.log;
   let consoleWarnSpy: typeof console.warn;
   let consoleErrorSpy: typeof console.error;
+  let consoleDirSpy: typeof console.dir;
   let logCalls: string[];
   let warnCalls: string[];
   let errorCalls: string[];
+  let dirCalls: unknown[];
 
   beforeEach(() => {
     logCalls = [];
     warnCalls = [];
     errorCalls = [];
+    dirCalls = [];
 
     consoleLogSpy = console.log;
     consoleWarnSpy = console.warn;
     consoleErrorSpy = console.error;
+    consoleDirSpy = console.dir;
 
     console.log = (...args: unknown[]) => {
       logCalls.push(...args.map((arg) => 
@@ -33,6 +37,9 @@ describe("logger", () => {
         typeof arg === 'object' ? JSON.stringify(arg) : String(arg)
       ));
     };
+    console.dir = (obj: unknown) => {
+      dirCalls.push(obj);
+    };
 
     // Reset logger options
     logger.setOptions({ quiet: false, json: false });
@@ -42,6 +49,7 @@ describe("logger", () => {
     console.log = consoleLogSpy;
     console.warn = consoleWarnSpy;
     console.error = consoleErrorSpy;
+    console.dir = consoleDirSpy;
   });
 
   describe("info", () => {
@@ -53,10 +61,10 @@ describe("logger", () => {
 
     it("should log info messages with data", () => {
       logger.info("Test message", { key: "value" });
-      expect(logCalls).toHaveLength(2);
+      expect(logCalls).toHaveLength(1);
       expect(logCalls[0]).toBe("Test message");
-      const data = JSON.parse(logCalls[1]);
-      expect(data.key).toBe("value");
+      expect(dirCalls).toHaveLength(1);
+      expect(dirCalls[0]).toEqual({ key: "value" });
     });
 
     it("should not log when quiet mode is enabled", () => {
@@ -94,10 +102,10 @@ describe("logger", () => {
 
     it("should log warning messages with data", () => {
       logger.warn("Warning message", { key: "value" });
-      expect(warnCalls).toHaveLength(2);
+      expect(warnCalls).toHaveLength(1);
       expect(warnCalls[0]).toBe("Warning message");
-      const data = JSON.parse(warnCalls[1]);
-      expect(data.key).toBe("value");
+      expect(dirCalls).toHaveLength(1);
+      expect(dirCalls[0]).toEqual({ key: "value" });
     });
 
     it("should not log when quiet mode is enabled", () => {
