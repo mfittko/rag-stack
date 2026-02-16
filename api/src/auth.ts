@@ -8,7 +8,7 @@ export function timingSafeEqual(a: string, b: string): boolean {
 }
 
 export function registerAuth(app: FastifyInstance) {
-  const token = process.env.RAG_API_TOKEN || "";
+  const token = process.env.RAGED_API_TOKEN || "";
   if (!token) return;
 
   app.addHook("onRequest", async (req: FastifyRequest, reply: FastifyReply) => {

@@ -38,7 +38,7 @@ spec:
               valueFrom:
                 secretKeyRef:
                   name: {{ .Release.Name }}-api-auth
-                  key: RAG_API_TOKEN
+                  key: RAGED_API_TOKEN
             {{- end }}
           volumeMounts:
             - name: tmp

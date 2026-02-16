@@ -45,7 +45,7 @@ spec:
             - "{{ .Values.indexer.repoId }}"
             {{- end }}
           env:
-            - name: RAG_API_TOKEN
+            - name: RAGED_API_TOKEN
               value: "{{ default .Values.api.auth.token .Values.indexer.token }}"
           volumeMounts:
             - name: tmp

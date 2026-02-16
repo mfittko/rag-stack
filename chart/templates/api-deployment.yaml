@@ -61,11 +61,11 @@ spec:
                   key: BLOB_STORE_BUCKET
             {{- end }}
             {{- if and .Values.api.auth.enabled .Values.api.auth.token }}
-            - name: RAG_API_TOKEN
+            - name: RAGED_API_TOKEN
               valueFrom:
                 secretKeyRef:
                   name: {{ .Release.Name }}-api-auth
-                  key: RAG_API_TOKEN
+                  key: RAGED_API_TOKEN
             {{- end }}
           volumeMounts:
             - name: tmp

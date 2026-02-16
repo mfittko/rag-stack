@@ -75,7 +75,7 @@ services:
       OLLAMA_URL: "http://ollama:11434"
       EMBED_MODEL: "nomic-embed-text"
       PORT: "8080"
-      RAG_API_TOKEN: ""  # set to enable auth
+      RAGED_API_TOKEN: ""  # set to enable auth
       ENRICHMENT_ENABLED: "false"
     ports: ["8080:8080"]
     depends_on:

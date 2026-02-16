@@ -1,7 +1,7 @@
 import type { IngestItem, IngestResponse } from "./types.js";
 
 function authHeaders(token?: string): Record<string, string> {
-  const t = token || process.env.RAG_API_TOKEN || "";
+  const t = token || process.env.RAGED_API_TOKEN || "";
   if (!t) return {};
   return { authorization: `Bearer ${t}` };
 }

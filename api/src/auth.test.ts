@@ -25,18 +25,18 @@ describe("timingSafeEqual", () => {
 });
 
 describe("registerAuth", () => {
-  const ORIGINAL_ENV = process.env.RAG_API_TOKEN;
+  const ORIGINAL_ENV = process.env.RAGED_API_TOKEN;
 
   afterEach(() => {
     if (ORIGINAL_ENV === undefined) {
-      delete process.env.RAG_API_TOKEN;
+      delete process.env.RAGED_API_TOKEN;
     } else {
-      process.env.RAG_API_TOKEN = ORIGINAL_ENV;
+      process.env.RAGED_API_TOKEN = ORIGINAL_ENV;
     }
   });
 
-  it("does not add auth hook when RAG_API_TOKEN is empty", async () => {
-    process.env.RAG_API_TOKEN = "";
+  it("does not add auth hook when RAGED_API_TOKEN is empty", async () => {
+    process.env.RAGED_API_TOKEN = "";
     const app = Fastify();
     registerAuth(app);
     app.post("/test", async () => ({ ok: true }));
@@ -53,7 +53,7 @@ describe("registerAuth", () => {
   });
 
   it("allows GET /healthz without auth token", async () => {
-    process.env.RAG_API_TOKEN = "secret-token";
+    process.env.RAGED_API_TOKEN = "secret-token";
     const app = Fastify();
     registerAuth(app);
     app.get("/healthz", async () => ({ ok: true }));
@@ -69,7 +69,7 @@ describe("registerAuth", () => {
   });
 
   it("returns 401 when no Authorization header is provided", async () => {
-    process.env.RAG_API_TOKEN = "secret-token";
+    process.env.RAGED_API_TOKEN = "secret-token";
     const app = Fastify();
     registerAuth(app);
     app.post("/test", async () => ({ ok: true }));
@@ -86,7 +86,7 @@ describe("registerAuth", () => {
   });
 
   it("returns 401 when Authorization header lacks Bearer prefix", async () => {
-    process.env.RAG_API_TOKEN = "secret-token";
+    process.env.RAGED_API_TOKEN = "secret-token";
     const app = Fastify();
     registerAuth(app);
     app.post("/test", async () => ({ ok: true }));
@@ -104,7 +104,7 @@ describe("registerAuth", () => {
   });
 
   it("returns 401 when wrong token is provided", async () => {
-    process.env.RAG_API_TOKEN = "secret-token";
+    process.env.RAGED_API_TOKEN = "secret-token";
     const app = Fastify();
     registerAuth(app);
     app.post("/test", async () => ({ ok: true }));
@@ -122,7 +122,7 @@ describe("registerAuth", () => {
   });
 
   it("allows request when correct token is provided", async () => {
-    process.env.RAG_API_TOKEN = "secret-token";
+    process.env.RAGED_API_TOKEN = "secret-token";
     const app = Fastify();
     registerAuth(app);
     app.post("/test", async () => ({ ok: true }));
