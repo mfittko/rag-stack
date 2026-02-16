@@ -126,18 +126,20 @@ All three core components are published:
 To publish a new version:
 
 ```bash
-# Create and push a version tag (include 'v' prefix)
-git tag v0.6.0
-git push origin v0.6.0
+# Create tag + GitHub release notes from CHANGELOG.md
+export OPENAI_API_KEY=your_key_here
+scripts/create-release.sh v0.6.0
 
-# The publish-images workflow will automatically:
-# 1. Build all three images with multi-arch support (amd64, arm64)
-# 2. Push to GHCR with semantic version tags (without 'v' prefix):
-#    - ghcr.io/mfittko/raged-api:0.6.0
-#    - ghcr.io/mfittko/raged-api:0.6
-#    - ghcr.io/mfittko/raged-api:0
-#    - ghcr.io/mfittko/raged-api:latest
+# Dry-run notes generation without pushing tag/release
+scripts/create-release.sh v0.6.0 --dry-run
 ```
+
+The script will:
+- generate release title/body with OpenAI using `CHANGELOG.md`
+- create and push an annotated tag
+- create a GitHub release with the generated notes
+
+The publish-images workflow will automatically build and publish all three images with multi-arch support (`linux/amd64`, `linux/arm64`) and semantic tags (`0.6.0`, `0.6`, `0`, `latest`).
 
 **Note:** 
 - Git tags use the `v` prefix (e.g., `v0.6.0`), but Docker image tags do not (e.g., `0.6.0`). Always reference images without the `v` prefix in Helm values and deployment configurations.
