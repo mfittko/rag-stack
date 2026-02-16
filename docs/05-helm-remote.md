@@ -160,8 +160,8 @@ To upgrade to a specific version from GHCR:
 
 ```bash
 helm upgrade rag ./chart -n rag \
-  --set api.image.tag=v0.6.0 \
-  --set enrichment.worker.image.tag=v0.6.0 \
+  --set api.image.tag=0.6.0 \
+  --set enrichment.worker.image.tag=0.6.0 \
   --reuse-values
 ```
 

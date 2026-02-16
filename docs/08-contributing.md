@@ -122,15 +122,21 @@ All three core components are published:
 To publish a new version:
 
 ```bash
-# Create and push a version tag
+# Create and push a version tag (include 'v' prefix)
 git tag v0.6.0
 git push origin v0.6.0
 
 # The publish-images workflow will automatically:
 # 1. Build all three images with multi-arch support (amd64, arm64)
-# 2. Push to GHCR with semantic version tags
+# 2. Push to GHCR with semantic version tags (without 'v' prefix):
+#    - ghcr.io/mfittko/raged-api:0.6.0
+#    - ghcr.io/mfittko/raged-api:0.6
+#    - ghcr.io/mfittko/raged-api:0
+#    - ghcr.io/mfittko/raged-api:latest
 # 3. Update the 'latest' tag
 ```
+
+**Note:** Git tags use the `v` prefix (e.g., `v0.6.0`), but Docker image tags do not (e.g., `0.6.0`). Always reference images without the `v` prefix in Helm values and deployment configurations.
 
 ### Image Features
 
