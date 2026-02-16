@@ -3,15 +3,20 @@
 /**
  * Translates a Qdrant-style filter to Postgres WHERE clause
  * Supports basic filters for now - can be extended as needed
+ * @param filter - The filter object
+ * @param paramIndexOffset - Starting parameter index (default: 0)
  */
-export function translateFilter(filter?: Record<string, unknown>): { sql: string; params: unknown[] } {
+export function translateFilter(
+  filter?: Record<string, unknown>,
+  paramIndexOffset = 0
+): { sql: string; params: unknown[] } {
   if (!filter) {
     return { sql: "", params: [] };
   }
 
   const conditions: string[] = [];
   const params: unknown[] = [];
-  let paramIndex = 1;
+  let paramIndex = 1 + paramIndexOffset;
 
   // Handle simple equality filters
   for (const [key, value] of Object.entries(filter)) {
@@ -48,9 +53,13 @@ export function translateFilter(filter?: Record<string, unknown>): { sql: string
 
 /**
  * Converts camelCase to snake_case for database columns
+ * Handles the first character specially to avoid leading underscore
  */
 function toSnakeCase(str: string): string {
-  return str.replace(/[A-Z]/g, (letter) => `_${letter.toLowerCase()}`);
+  return str
+    .replace(/([A-Z])/g, (match, p1, offset) => {
+      return offset === 0 ? p1.toLowerCase() : `_${p1.toLowerCase()}`;
+    });
 }
 
 /**

@@ -3,6 +3,11 @@
 
 import { getPool } from "../db.js";
 
+// Retry configuration constants
+const RETRY_BASE_SECONDS = 60;
+const RETRY_BACKOFF_MULTIPLIER = 2;
+const MAX_RETRY_DELAY_SECONDS = 3600; // 1 hour
+
 export interface TaskClaimRequest {
   workerId?: string;
   leaseDuration?: number; // seconds
@@ -277,7 +282,10 @@ export async function failTask(taskId: string, failRequest: TaskFailRequest): Pr
       );
     } else {
       // Retry with exponential backoff
-      const retryDelaySeconds = Math.min(60 * Math.pow(2, attempt - 1), 3600); // Max 1 hour
+      const retryDelaySeconds = Math.min(
+        RETRY_BASE_SECONDS * Math.pow(RETRY_BACKOFF_MULTIPLIER, attempt - 1),
+        MAX_RETRY_DELAY_SECONDS
+      );
 
       await client.query(
         `UPDATE task_queue

@@ -53,15 +53,15 @@ export async function query(
   }
   const topK = request.topK ?? 8;
 
-  // Translate filter to Postgres WHERE clause
-  const { sql: filterSql, params: filterParams } = translateFilter(request.filter);
+  // Translate filter to Postgres WHERE clause (offset by 3 for the base params)
+  const { sql: filterSql, params: filterParams } = translateFilter(request.filter, 3);
 
   // Build query with pgvector cosine distance
   const pool = getPool();
   const vectorLiteral = formatVector(vector);
   
-  const params: unknown[] = [vectorLiteral, topK, col, ...filterParams];
-  
+  // Note: We embed the vector literal directly in SQL as pgvector doesn't support
+  // passing vectors as parameters in all driver versions
   const result = await pool.query<{
     chunk_id: string;
     distance: number;
@@ -81,7 +81,7 @@ export async function query(
   }>(
     `SELECT 
       c.id::text || ':' || c.chunk_index AS chunk_id,
-      c.embedding <=> $1::vector AS distance,
+      c.embedding <=> '${vectorLiteral}'::vector AS distance,
       c.text,
       d.source,
       c.chunk_index,
@@ -97,10 +97,10 @@ export async function query(
       c.tier3_meta
     FROM chunks c
     JOIN documents d ON c.document_id = d.id
-    WHERE d.collection = $3${filterSql}
-    ORDER BY c.embedding <=> $1::vector
+    WHERE d.collection = $1${filterSql}
+    ORDER BY c.embedding <=> '${vectorLiteral}'::vector
     LIMIT $2`,
-    params
+    [col, topK, ...filterParams]
   );
 
   const results: QueryResultItem[] = result.rows.map((row) => ({
@@ -118,8 +118,8 @@ export async function query(
       lang: row.lang,
       itemUrl: row.item_url,
       tier1Meta: row.tier1_meta,
-      tier2: row.tier2_meta,
-      tier3: row.tier3_meta,
+      tier2Meta: row.tier2_meta,
+      tier3Meta: row.tier3_meta,
     },
   }));
 
@@ -130,18 +130,18 @@ export async function query(
     // Extract entity names from tier2/tier3 metadata in results
     const entityNames = new Set<string>();
     for (const resultItem of results) {
-      const tier2 = resultItem.payload?.tier2 as Record<string, unknown> | undefined;
-      const tier3 = resultItem.payload?.tier3 as Record<string, unknown> | undefined;
+      const tier2Meta = resultItem.payload?.tier2Meta as Record<string, unknown> | undefined;
+      const tier3Meta = resultItem.payload?.tier3Meta as Record<string, unknown> | undefined;
 
-      if (tier2?.entities) {
-        const entities = tier2.entities as Array<{ text: string }>;
+      if (tier2Meta?.entities) {
+        const entities = tier2Meta.entities as Array<{ text: string }>;
         for (const entity of entities) {
           entityNames.add(entity.text);
         }
       }
 
-      if (tier3?.entities) {
-        const entities = tier3.entities as Array<{ name: string }>;
+      if (tier3Meta?.entities) {
+        const entities = tier3Meta.entities as Array<{ name: string }>;
         for (const entity of entities) {
           entityNames.add(entity.name);
         }

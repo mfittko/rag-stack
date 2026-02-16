@@ -298,7 +298,6 @@ export async function ingest(
       const documentId = docResult.rows[0].id;
 
       // Embed chunks in batches
-      const EMBED_BATCH_SIZE = 500;
       for (let batchStart = 0; batchStart < procItem.chunks.length; batchStart += EMBED_BATCH_SIZE) {
         const batchEnd = Math.min(batchStart + EMBED_BATCH_SIZE, procItem.chunks.length);
         const batchChunks = procItem.chunks.slice(batchStart, batchEnd);
@@ -308,9 +307,12 @@ export async function ingest(
         const chunkValues: unknown[] = [];
         const chunkRows: string[] = [];
         
+        // 6 parameters per row: document_id, chunk_index, text, embedding, enrichment_status, tier1_meta
+        const PARAMS_PER_CHUNK = 6;
+        
         for (let i = 0; i < batchChunks.length; i++) {
           const chunkIndex = batchStart + i;
-          const base = i * 6;
+          const base = i * PARAMS_PER_CHUNK;
           chunkRows.push(
             `($${base + 1}, $${base + 2}, $${base + 3}, $${base + 4}, $${base + 5}, $${base + 6})`
           );
