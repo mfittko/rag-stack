@@ -15,7 +15,7 @@ flowchart TD
     Q3 -->|No| Q4{Slow responses?}
     Q4 -->|Yes| A4[Check Ollama model loaded]
     Q4 -->|No| Q5{Enrichment stuck?}
-    Q5 -->|Yes| A5[Check Redis/Worker/Neo4j]
+    Q5 -->|Yes| A5[Check Worker/Postgres tasks]
     Q5 -->|No| A6[Check API logs]
 
     style A1 fill:#fff3e0
@@ -52,14 +52,17 @@ curl -s -H "Authorization: Bearer YOUR_TOKEN" http://localhost:8080/query \
 **Fix:**
 1. Verify data was indexed: check CLI output for `upserted` counts
 2. Ensure `--collection` matches between index and query commands
-3. Check Qdrant directly:
+3. Check Postgres directly:
 
 ```bash
-# List collections
-curl -s http://localhost:6333/collections | jq '.result.collections'
+# Connect to Postgres
+psql -h localhost -U user -d raged
 
-# Check point count
-curl -s http://localhost:6333/collections/docs | jq '.result.points_count'
+# Check collections
+SELECT DISTINCT collection FROM chunks;
+
+# Check chunk count
+SELECT COUNT(*) FROM chunks WHERE collection = 'docs';
 ```
 
 ## Ollama Connection Failed
@@ -77,7 +80,7 @@ curl http://localhost:11434/api/pull -d '{"name":"nomic-embed-text"}'
 
 ## API Not Starting
 
-**Cause:** Qdrant or Ollama not reachable.
+**Cause:** Postgres or Ollama not reachable.
 
 **Fix:**
 ```bash
@@ -114,7 +117,7 @@ Expected behavior: first run is slower, subsequent runs reuse layers and are fas
 
 ## Enrichment Not Processing
 
-**Cause:** Worker not running, Redis not connected, or tasks stuck.
+**Cause:** Worker not running, Postgres not connected, or tasks stuck.
 
 **Fix:**
 
@@ -132,44 +135,13 @@ docker compose logs enrichment-worker --tail 50
 # or
 kubectl logs -l app=worker -n rag --tail 50
 
-# Check Redis is running
-docker compose ps redis
-# or
-kubectl get pods -l app=redis -n rag
-
-# Check Redis queue directly
-docker compose exec redis redis-cli LLEN enrichment:pending
-docker compose exec redis redis-cli LLEN enrichment:dead-letter
+# Check Postgres task queue directly
+psql -h localhost -U user -d raged -c "SELECT status, COUNT(*) FROM enrichment_tasks GROUP BY status;"
 
 # Restart worker if stuck
 docker compose restart enrichment-worker
 # or
 kubectl rollout restart deployment/worker -n rag
-```
-
-## Neo4j Connection Failed
-
-**Cause:** Neo4j not running, wrong credentials, or network issue.
-
-**Fix:**
-
-```bash
-# Check Neo4j is running
-docker compose ps neo4j
-# or
-kubectl get pods -l app=neo4j -n rag
-
-# Check Neo4j credentials in API config
-docker compose exec api env | grep NEO4J
-
-# Test Neo4j connection directly (default docker-compose uses auth=none)
-docker compose exec neo4j cypher-shell "MATCH (n) RETURN count(n);"
-# If auth is enabled: cypher-shell -u neo4j -p <password> "MATCH (n) RETURN count(n);"
-
-# Check Neo4j logs
-docker compose logs neo4j --tail 50
-# or
-kubectl logs -l app=neo4j -n rag --tail 50
 ```
 
 ## Enrichment Tasks Failing
@@ -179,8 +151,8 @@ kubectl logs -l app=neo4j -n rag --tail 50
 **Fix:**
 
 ```bash
-# Check dead-letter queue for failed tasks
-docker compose exec redis redis-cli LRANGE enrichment:dead-letter 0 10
+# Check failed tasks in Postgres
+psql -h localhost -U user -d raged -c "SELECT * FROM enrichment_tasks WHERE status = 'failed' ORDER BY updated_at DESC LIMIT 10;"
 
 # Check worker logs for errors
 docker compose logs enrichment-worker --tail 100 | grep -i error
@@ -194,31 +166,25 @@ curl -s http://localhost:11434/api/tags | jq '.models[] | select(.name | contain
 # Pull LLM model if missing
 curl http://localhost:11434/api/pull -d '{"name":"llama3"}'
 
-# Clear dead-letter queue and retry
-docker compose exec redis redis-cli DEL enrichment:dead-letter
+# Retry failed tasks
 curl -s -X POST http://localhost:8080/enrichment/enqueue -H "Content-Type: application/json" -d '{"force":true}'
 ```
 
 ## Graph Query Returns 503
 
-**Cause:** Neo4j not enabled or not connected.
+**Cause:** Graph functionality not enabled or Postgres not connected.
 
 **Fix:**
 
 ```bash
-# Check if Neo4j is configured
+# Check if enrichment is enabled
 curl -s http://localhost:8080/enrichment/stats | jq .
-# (If Neo4j is disabled, this will return zero counts)
 
-# Verify NEO4J_URL is set in API
-docker compose exec api env | grep NEO4J_URL
+# Verify DATABASE_URL is set in API
+docker compose exec api env | grep DATABASE_URL
 
-# Enable enrichment profile to start Neo4j
+# Enable enrichment profile
 docker compose --profile enrichment up -d
-
-# Check Neo4j browser (if exposed)
-open http://localhost:7474
-# Default docker-compose: no auth required. For production: neo4j / <your-password>
 ```
 
 ## Worker High Memory Usage

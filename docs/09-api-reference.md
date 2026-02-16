@@ -27,7 +27,7 @@ Health check. Always unauthenticated.
 
 ### POST /ingest
 
-Chunk, embed, and store text items or fetch content from URLs in a Qdrant collection.
+Chunk, embed, and store text items or fetch content from URLs in a collection.
 
 **Request (text-based):**
 ```json
@@ -64,7 +64,7 @@ Chunk, embed, and store text items or fetch content from URLs in a Qdrant collec
 
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
-| `collection` | string | No | Qdrant collection name (default: `docs`) |
+| `collection` | string | No | Collection name (default: `docs`) |
 | `items` | array | Yes | Items to ingest (max 1000) |
 | `items[].id` | string | No | Base ID for chunks (auto-generated UUID if omitted) |
 | `items[].text` | string | Conditional* | Full text content to chunk and embed |
@@ -120,8 +120,8 @@ Chunk, embed, and store text items or fetch content from URLs in a Qdrant collec
 4. Runs tier-1 metadata extraction (heuristic/AST/EXIF based on type)
 5. Splits each item's text into chunks (~1800 characters, split on line boundaries)
 6. Embeds each chunk via Ollama
-7. Upserts all chunks into Qdrant with payload: `{ text, source, chunkIndex, enrichmentStatus, ...metadata }`
-8. If `enrich: true` and enrichment is enabled, enqueues async enrichment task to Redis
+7. Upserts all chunks into Postgres with metadata: `{ text, source, chunkIndex, enrichmentStatus, ...metadata }`
+8. If `enrich: true` and enrichment is enabled, creates async enrichment task in Postgres
 9. Chunk IDs follow the pattern `<baseId>:<chunkIndex>`
 
 **URL Ingestion:**
@@ -154,10 +154,10 @@ Embed a query and search for similar chunks.
 
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
-| `collection` | string | No | Qdrant collection name (default: `docs`) |
+| `collection` | string | No | Collection name (default: `docs`) |
 | `query` | string | Yes | Search query text |
 | `topK` | number | No | Number of results (default: `8`) |
-| `filter` | object | No | Qdrant filter object |
+| `filter` | object | No | Filter object |
 
 **Response:**
 ```json
@@ -235,7 +235,7 @@ Embed a query, search for similar chunks, and optionally expand related entities
 
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
-| `graphExpand` | boolean | No | Enable graph-based entity expansion (requires Neo4j) |
+| `graphExpand` | boolean | No | Enable graph-based entity expansion (requires enrichment enabled) |
 
 **Response (with graph expansion):**
 ```json
@@ -254,9 +254,9 @@ Embed a query, search for similar chunks, and optionally expand related entities
 
 **Behavior:**
 - When `graphExpand: true`, extracts entities from `tier2`/`tier3` metadata in results
-- Expands entities via Neo4j graph traversal (2 hops by default)
+- Expands entities via Postgres relationship traversal (2 hops by default)
 - Returns expanded entity set in `graph` field
-- Gracefully returns no graph data if Neo4j is not configured
+- Gracefully returns no graph data if enrichment is not configured
 
 ---
 
@@ -336,18 +336,18 @@ Get system-wide enrichment statistics.
 
 | Field | Type | Description |
 |-------|------|-------------|
-| `queue.pending` | number | Tasks in Redis pending queue |
+| `queue.pending` | number | Tasks in Postgres task queue |
 | `queue.processing` | number | Tasks currently being processed |
-| `queue.deadLetter` | number | Failed tasks in dead-letter queue |
-| `totals.enriched` | number | Total enriched chunks in Qdrant |
+| `queue.deadLetter` | number | Failed tasks count |
+| `totals.enriched` | number | Total enriched chunks |
 | `totals.failed` | number | Total failed chunks |
 | `totals.pending` | number | Total pending chunks |
 | `totals.processing` | number | Total processing chunks |
 | `totals.none` | number | Total chunks with no enrichment |
 
 **Behavior:**
-- Returns zero counts when enrichment is disabled (no Redis/worker)
-- Scans Qdrant collection to count chunks by `enrichmentStatus`
+- Returns zero counts when enrichment is disabled (no worker)
+- Scans collection to count chunks by `enrichmentStatus`
 
 ---
 
@@ -384,7 +384,7 @@ Manually trigger enrichment for existing chunks.
 **Behavior:**
 - Scans collection for chunks with `enrichmentStatus` != `"enriched"` (unless `force: true`)
 - Creates enrichment tasks with correct `totalChunks` per baseId
-- Enqueues tasks to Redis `enrichment:pending` queue
+- Inserts tasks to Postgres `enrichment_tasks` table
 - Returns 0 when enrichment is disabled
 
 ---
@@ -427,6 +427,6 @@ GET /graph/entity/AuthService
 | `documents` | array | Documents that mention this entity |
 
 **Error Responses:**
-- `503` - Graph functionality is not enabled (Neo4j not configured)
+- `503` - Graph functionality is not enabled (enrichment not configured)
 - `404` - Entity not found in the graph
 
