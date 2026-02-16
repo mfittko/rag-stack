@@ -13,7 +13,7 @@ This project is currently greenfield and not yet deployed, so no backward-compat
 ```mermaid
 graph TD
     EXT[Chrome Extension] -->|HTTP| API
-    CLI[raged-index CLI] -->|HTTP| API
+    CLI[raged CLI] -->|HTTP| API
     AGENT[AI Agents] -->|HTTP| API
 
     API[RAG API] -->|embed| OL[Ollama]

@@ -437,7 +437,7 @@ AI coding agents work best with relevant context, but stuffing entire repositori
 
 ```mermaid
 graph TD
-    A1[AI Agent 1<br/>Claude Code] -->|query| CLI[raged-index CLI]
+    A1[AI Agent 1<br/>Claude Code] -->|query| CLI[raged CLI]
     A2[AI Agent 2<br/>Other Agent] -->|query| CLI
     A3[AI Agent N] -->|query| CLI
     CLI -->|HTTP| API[RAG API<br/>Fastify]
@@ -527,7 +527,7 @@ A shared memory layer for AI coding agents — index repositories, embed code, a
 
 ```mermaid
 graph LR
-    Agent[AI Agent] -->|"raged-index query"| CLI[CLI]
+    Agent[AI Agent] -->|"raged query"| CLI[CLI]
     CLI -->|HTTP| API[RAG API]
     API -->|embed| Ollama
     API -->|search| Qdrant
@@ -641,7 +641,7 @@ raged is a four-component system: CLI, API, vector database, and embedding runti
 
 ```mermaid
 graph TD
-    CLI[raged-index CLI] -->|"POST /ingest"| API[RAG API<br/>:8080]
+    CLI[raged CLI] -->|"POST /ingest"| API[RAG API<br/>:8080]
     CLI -->|"POST /query"| API
     API -->|"POST /api/embeddings"| OL[Ollama<br/>:11434]
     API -->|"upsert / search"| QD[Qdrant<br/>:6333]
@@ -680,7 +680,7 @@ Metadata payload per point:
 
 Runs the `nomic-embed-text` model locally. The API calls Ollama's `/api/embeddings` endpoint for each text chunk. Produces 768-dimensional vectors.
 
-### CLI (raged-index)
+### CLI (raged)
 
 Command-line tool for indexing and querying. Clones Git repos to a temp directory, scans for text files, sends them in batches to the API's `/ingest` endpoint.
 
@@ -694,7 +694,7 @@ sequenceDiagram
     participant O as Ollama
     participant Q as Qdrant
 
-    U->>C: raged-index index --repo <url>
+    U->>C: raged index --repo <url>
     C->>C: git clone (shallow)
     C->>C: Scan files, filter, read text
     loop Batch of 50 files
@@ -721,7 +721,7 @@ sequenceDiagram
     participant O as Ollama
     participant Q as Qdrant
 
-    U->>C: raged-index query --q "auth flow"
+    U->>C: raged query --q "auth flow"
     C->>A: POST /query { query, topK }
     A->>O: POST /api/embeddings { prompt }
     O-->>A: 768d vector
@@ -893,7 +893,7 @@ git commit -m "docs: expand local dev doc with startup diagram and development i
 Replace the entire contents with:
 
 ```markdown
-# CLI (raged-index)
+# CLI (raged)
 
 Command-line tool for indexing Git repositories and querying the RAG API.
 
@@ -1036,12 +1036,12 @@ sequenceDiagram
     participant U as User
     participant C as Claude Code
     participant S as rag-memory Skill
-    participant CLI as raged-index CLI
+    participant CLI as raged CLI
     participant API as RAG API
 
     U->>C: "How does auth work in project X?"
     C->>S: Invoke skill
-    S->>CLI: raged-index query --q "auth" --topK 5
+    S->>CLI: raged query --q "auth" --topK 5
     CLI->>API: POST /query
     API-->>CLI: Relevant chunks
     CLI-->>S: Formatted results
@@ -1083,7 +1083,7 @@ The skill is invoked automatically when Claude determines it needs codebase cont
 
 Claude will run:
 ```bash
-raged-index query \
+raged query \
   --api "${RAGED_URL:-http://localhost:8080}" \
   --q "authentication implementation" \
   --topK 5 \
@@ -1096,7 +1096,7 @@ raged is designed to be agent-agnostic. While the current skill targets Claude C
 
 ```bash
 # Any agent can query
-raged-index query --api <url> --q "<question>" --topK 5
+raged query --api <url> --q "<question>" --topK 5
 
 # Or call the HTTP API directly
 curl -X POST https://rag.example.com/query \
@@ -1175,8 +1175,8 @@ docker build -t your-registry/rag-api:0.5.0 ./api
 docker push your-registry/rag-api:0.5.0
 
 # CLI (for in-cluster indexing)
-docker build -t your-registry/raged-index:0.5.0 ./cli
-docker push your-registry/raged-index:0.5.0
+docker build -t your-registry/raged:0.5.0 ./cli
+docker push your-registry/raged:0.5.0
 ```
 
 ## Install
@@ -1411,7 +1411,7 @@ helm upgrade --install rag ./chart -n rag --create-namespace \
   --set api.auth.enabled=true \
   --set api.auth.token=REPLACE_ME \
   --set indexer.enabled=true \
-  --set indexer.image.repository=your-registry/raged-index \
+  --set indexer.image.repository=your-registry/raged \
   --set indexer.image.tag=0.5.0 \
   --set indexer.repoUrl=https://github.com/<org>/<repo>.git \
   --set indexer.repoId=my-repo \
@@ -1423,7 +1423,7 @@ helm upgrade --install rag ./chart -n rag --create-namespace \
 | Value | Default | Description |
 |-------|---------|-------------|
 | `indexer.enabled` | `false` | Create the indexer Job |
-| `indexer.image.repository` | `your-registry/raged-index` | Indexer image |
+| `indexer.image.repository` | `your-registry/raged` | Indexer image |
 | `indexer.image.tag` | `0.5.0` | Indexer image tag |
 | `indexer.repoUrl` | `""` | Git repository URL to index |
 | `indexer.repoId` | `""` | Stable identifier for the repo |
@@ -1450,7 +1450,7 @@ For private repos, you need to provide Git SSH credentials to the indexer Job. T
 kubectl get jobs -n rag
 
 # View indexer logs
-kubectl logs -n rag -l app=raged-indexer --tail 100
+kubectl logs -n rag -l app=rageder --tail 100
 ```
 ```
 

@@ -20,7 +20,7 @@ Vector search alone finds *semantically similar* content. But real knowledge has
 
 ```mermaid
 graph TD
-    A1[AI Agent 1<br/>Claude Code] -->|query| CLI[raged-index CLI]
+    A1[AI Agent 1<br/>Claude Code] -->|query| CLI[raged CLI]
     A2[AI Agent 2<br/>OpenClaw] -->|query| CLI
     A3[AI Agent N] -->|HTTP| API
     CLI -->|HTTP| API[RAG API<br/>Fastify]
@@ -81,9 +81,9 @@ What exists:
 - ✅ `GET /graph/entity/:name` — Query entity details and connections
 
 **CLI enhancements:**
-- ✅ `raged-index ingest` — Ingest arbitrary files (PDFs, images, Slack exports)
-- ✅ `raged-index enrich` — Trigger and monitor enrichment with `--force` and `--stats-only` flags
-- ✅ `raged-index graph` — Query knowledge graph entities
+- ✅ `raged ingest` — Ingest arbitrary files (PDFs, images, Slack exports)
+- ✅ `raged enrich` — Trigger and monitor enrichment with `--force` and `--stats-only` flags
+- ✅ `raged graph` — Query knowledge graph entities
 - ✅ `--no-enrich` / `--doc-type` flags on ingest commands (enrichment is on by default when enabled server-side)
 
 **Infrastructure:**

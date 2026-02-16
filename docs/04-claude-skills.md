@@ -13,12 +13,12 @@ sequenceDiagram
     participant U as User
     participant C as Claude Code
     participant S as rag-memory Skill
-    participant CLI as raged-index CLI
+    participant CLI as raged CLI
     participant API as RAG API
 
     U->>C: "How does auth work in project X?"
     C->>S: Invoke skill
-    S->>CLI: raged-index query --q "auth" --topK 5
+    S->>CLI: raged query --q "auth" --topK 5
     CLI->>API: POST /query
     API-->>CLI: Relevant chunks
     CLI-->>S: Formatted results
@@ -56,7 +56,7 @@ The skill is invoked automatically when Claude determines it needs context. You 
 
 Claude will run:
 ```bash
-raged-index query \
+raged query \
   --api "${RAGED_URL:-http://localhost:8080}" \
   --q "authentication implementation" \
   --topK 5 \
@@ -124,7 +124,7 @@ Any agent that can call HTTP or execute shell commands can use raged:
 
 ```bash
 # Via CLI
-raged-index query --api <url> --q "<question>" --topK 5
+raged query --api <url> --q "<question>" --topK 5
 
 # Via HTTP API
 curl -X POST https://rag.example.com/query \

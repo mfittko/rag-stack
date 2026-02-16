@@ -6,7 +6,7 @@ raged is a multi-component system for RAG with enrichment and knowledge graph ca
 
 ```mermaid
 graph TD
-    CLI[raged-index CLI] -->|"POST /ingest"| API[RAG API<br/>:8080]
+    CLI[raged CLI] -->|"POST /ingest"| API[RAG API<br/>:8080]
     CLI -->|"POST /query"| API
     CLI -->|"POST /enrichment/enqueue"| API
     CLI -->|"GET /graph/entity/:name"| API
@@ -140,7 +140,7 @@ sequenceDiagram
 **Error Handling:**
 Partial success model — successfully fetched items are ingested, failures are returned in `errors` array with per-URL status and reason.
 
-### CLI (raged-index)
+### CLI (raged)
 
 Command-line tool with five commands:
 - `index` — Clone Git repo and index files
@@ -162,7 +162,7 @@ sequenceDiagram
     participant W as Worker
     participant N as Neo4j
 
-    U->>C: raged-index index --repo <url>
+    U->>C: raged index --repo <url>
     C->>C: git clone (shallow)
     C->>C: Scan files, filter, read text
     loop Batch of 50 files
@@ -202,7 +202,7 @@ sequenceDiagram
     participant O as Ollama
     participant Q as Qdrant
 
-    U->>C: raged-index index --repo <url>
+    U->>C: raged index --repo <url>
     C->>C: git clone (shallow)
     C->>C: Scan files, filter, read text
     loop Batch of 50 files
@@ -231,7 +231,7 @@ sequenceDiagram
     participant O as Ollama
     participant Q as Qdrant
 
-    U->>C: raged-index query --q "auth flow"
+    U->>C: raged query --q "auth flow"
     C->>A: POST /query { query, topK }
     A->>O: POST /api/embeddings { prompt }
     O-->>A: 768d vector
@@ -252,7 +252,7 @@ sequenceDiagram
     participant Q as Qdrant
     participant N as Neo4j
 
-    U->>C: raged-index query --q "auth flow" (with graphExpand)
+    U->>C: raged query --q "auth flow" (with graphExpand)
     C->>A: POST /query { query, topK, graphExpand: true }
     A->>O: POST /api/embeddings { prompt }
     O-->>A: 768d vector

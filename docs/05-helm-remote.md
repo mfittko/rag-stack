@@ -79,8 +79,8 @@ docker build -t your-registry/rag-api:0.5.0 ./api
 docker push your-registry/rag-api:0.5.0
 
 # CLI (for in-cluster indexing)
-docker build -t your-registry/raged-index:0.5.0 ./cli
-docker push your-registry/raged-index:0.5.0
+docker build -t your-registry/raged:0.5.0 ./cli
+docker push your-registry/raged:0.5.0
 ```
 
 ## Install

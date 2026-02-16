@@ -4,7 +4,7 @@ A vector-first knowledge base for AI agents — ingest any text (code, docs, art
 
 ```mermaid
 graph LR
-    Agent[AI Agent] -->|"raged-index query"| CLI[CLI]
+    Agent[AI Agent] -->|"raged query"| CLI[CLI]
     CLI -->|HTTP| API[RAGED API]
     API -->|embed| Ollama
     API -->|search| Qdrant

@@ -1,4 +1,4 @@
-# CLI (raged-index)
+# CLI (raged)
 
 Command-line tool for indexing Git repositories, ingesting arbitrary files, and querying the RAG API.
 

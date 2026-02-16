@@ -31,7 +31,7 @@ helm upgrade --install rag ./chart -n rag --create-namespace \
   --set api.auth.enabled=true \
   --set api.auth.token=REPLACE_ME \
   --set indexer.enabled=true \
-  --set indexer.image.repository=your-registry/raged-index \
+  --set indexer.image.repository=your-registry/raged \
   --set indexer.image.tag=0.5.0 \
   --set indexer.repoUrl=https://github.com/<org>/<repo>.git \
   --set indexer.repoId=my-repo \
@@ -43,7 +43,7 @@ helm upgrade --install rag ./chart -n rag --create-namespace \
 | Value | Default | Description |
 |-------|---------|-------------|
 | `indexer.enabled` | `false` | Create the indexer Job |
-| `indexer.image.repository` | `your-registry/raged-index` | Indexer image |
+| `indexer.image.repository` | `your-registry/raged` | Indexer image |
 | `indexer.image.tag` | `0.5.0` | Indexer image tag |
 | `indexer.repoUrl` | `""` | Git repository URL to index |
 | `indexer.repoId` | `""` | Stable identifier for the repo |
@@ -70,5 +70,5 @@ For private repos, you need to provide Git SSH credentials to the indexer Job. T
 kubectl get jobs -n rag
 
 # View indexer logs
-kubectl logs -n rag -l app=raged-indexer --tail 100
+kubectl logs -n rag -l app=rageder --tail 100
 ```

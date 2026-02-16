@@ -10,7 +10,7 @@ async function main() {
   const program = new Command();
   
   program
-    .name("rag-index")
+    .name("raged")
     .description("CLI tool for indexing repositories and querying the RAG API")
     .version("1.0.0");
 

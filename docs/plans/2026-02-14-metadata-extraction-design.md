@@ -401,7 +401,7 @@ Trigger enrichment for already-ingested content. Scans Qdrant for items with `en
 
 ## CLI Changes
 
-### Updated `raged-index index`
+### Updated `raged index`
 
 | New Flag | Type | Default | Description |
 |----------|------|---------|-------------|
@@ -409,15 +409,15 @@ Trigger enrichment for already-ingested content. Scans Qdrant for items with `en
 | `--no-enrich` | - | - | Skip enrichment (current behavior) |
 | `--doc-type` | string | auto-detect | Force document type for all files |
 
-### New `raged-index ingest`
+### New `raged ingest`
 
 Ingest arbitrary files from disk (not just git repos):
 
 ```bash
-raged-index ingest --file ./notes/standup.md
-raged-index ingest --dir ./knowledge/
-raged-index ingest --file ./export.json --doc-type slack
-raged-index ingest --file ./diagram.png
+raged ingest --file ./notes/standup.md
+raged ingest --dir ./knowledge/
+raged ingest --file ./export.json --doc-type slack
+raged ingest --file ./diagram.png
 ```
 
 | Flag | Type | Default | Description |
@@ -430,20 +430,20 @@ raged-index ingest --file ./diagram.png
 | `--token` | string | env | Bearer token |
 | `--no-enrich` | - | - | Skip enrichment |
 
-### New `raged-index enrich`
+### New `raged enrich`
 
 ```bash
-raged-index enrich --api http://localhost:8080
-raged-index enrich --collection docs
-raged-index enrich --force
-raged-index enrich --stats-only
+raged enrich --api http://localhost:8080
+raged enrich --collection docs
+raged enrich --force
+raged enrich --stats-only
 ```
 
-### New `raged-index graph`
+### New `raged graph`
 
 ```bash
-raged-index graph --entity "AuthService"
-raged-index graph --entity "AuthService" --depth 2
+raged graph --entity "AuthService"
+raged graph --entity "AuthService" --depth 2
 ```
 
 ## Error Handling
@@ -458,7 +458,7 @@ raged-index graph --entity "AuthService" --depth 2
 | Image too large for multimodal LLM | Resize before sending, note in metadata |
 | Unsupported document type | Fall back to generic "text" extraction |
 
-Dead letter queue: after 3 failed attempts, tasks move to `enrichment:dead-letter` in Redis. `raged-index enrich --stats-only` shows stats for inspection.
+Dead letter queue: after 3 failed attempts, tasks move to `enrichment:dead-letter` in Redis. `raged enrich --stats-only` shows stats for inspection.
 
 ## Observability
 

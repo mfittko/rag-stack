@@ -8,5 +8,5 @@ Env:
 
 Query:
 ```bash
-raged-index query --api "${RAGED_URL:-http://localhost:8080}" --q "<question>" --topK 5 --token "${RAGED_API_TOKEN:-}"
+raged query --api "${RAGED_URL:-http://localhost:8080}" --q "<question>" --topK 5 --token "${RAGED_API_TOKEN:-}"
 ```

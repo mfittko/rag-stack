@@ -1,9 +1,9 @@
 {
-  "name": "rag-index",
+  "name": "raged",
   "version": "1.0.0",
   "type": "module",
   "bin": {
-    "rag-index": "dist/index.js"
+    "raged": "dist/index.js"
   },
   "scripts": {
     "dev": "tsx src/index.ts",
