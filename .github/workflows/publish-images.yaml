@@ -1,0 +1,122 @@
+name: Publish Docker Images
+
+on:
+  push:
+    branches:
+      - main
+    tags:
+      - "v*.*.*"
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_PREFIX: ghcr.io/mfittko
+
+jobs:
+  publish-node-images:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    strategy:
+      matrix:
+        include:
+          - component: api
+            context: ./api
+            image: raged-api
+          - component: cli
+            context: ./cli
+            image: raged
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract metadata (tags, labels)
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.IMAGE_PREFIX }}/${{ matrix.image }}
+          tags: |
+            # For version tags (v1.2.3)
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=semver,pattern={{major}}
+            # For main branch
+            type=ref,event=branch
+            type=sha,prefix=sha-
+            # Latest tag on release tags only
+            type=raw,value=latest,enable={{is_default_branch}}
+          labels: |
+            org.opencontainers.image.title=RAGed ${{ matrix.component }}
+            org.opencontainers.image.description=Multi-agent memory hub - ${{ matrix.component }} component
+            org.opencontainers.image.vendor=mfittko
+
+      - name: Build and push ${{ matrix.component }} image
+        uses: docker/build-push-action@v6
+        with:
+          context: ${{ matrix.context }}
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha,scope=docker-${{ matrix.component }}
+          cache-to: type=gha,mode=max,scope=docker-${{ matrix.component }}
+          platforms: linux/amd64,linux/arm64
+
+  publish-worker-image:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract metadata (tags, labels)
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.IMAGE_PREFIX }}/raged-worker
+          tags: |
+            # For version tags (v1.2.3)
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=semver,pattern={{major}}
+            # For main branch
+            type=ref,event=branch
+            type=sha,prefix=sha-
+            # Latest tag on release tags only
+            type=raw,value=latest,enable={{is_default_branch}}
+          labels: |
+            org.opencontainers.image.title=RAGed worker
+            org.opencontainers.image.description=Multi-agent memory hub - enrichment worker component
+            org.opencontainers.image.vendor=mfittko
+
+      - name: Build and push worker image
+        uses: docker/build-push-action@v6
+        with:
+          context: ./worker
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha,scope=docker-worker
+          cache-to: type=gha,mode=max,scope=docker-worker
+          platforms: linux/amd64,linux/arm64

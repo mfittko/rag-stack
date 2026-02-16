@@ -26,24 +26,22 @@ sequenceDiagram
 
 ```bash
 helm upgrade --install rag ./chart -n rag --create-namespace \
-  --set api.image.repository=your-registry/raged-api \
-  --set api.image.tag=0.5.0 \
   --set api.auth.enabled=true \
   --set api.auth.token=REPLACE_ME \
   --set indexer.enabled=true \
-  --set indexer.image.repository=your-registry/raged \
-  --set indexer.image.tag=0.5.0 \
   --set indexer.repoUrl=https://github.com/<org>/<repo>.git \
   --set indexer.repoId=my-repo \
   --set indexer.branch=main
 ```
+
+*Note: The chart now defaults to official GHCR images (`ghcr.io/mfittko/raged-api` and `ghcr.io/mfittko/raged`). Override with `--set api.image.repository` and `--set indexer.image.repository` if using custom builds.*
 
 ## Indexer Values
 
 | Value | Default | Description |
 |-------|---------|-------------|
 | `indexer.enabled` | `false` | Create the indexer Job |
-| `indexer.image.repository` | `your-registry/raged` | Indexer image |
+| `indexer.image.repository` | `ghcr.io/mfittko/raged` | Indexer image |
 | `indexer.image.tag` | `0.5.0` | Indexer image tag |
 | `indexer.repoUrl` | `""` | Git repository URL to index |
 | `indexer.repoId` | `""` | Stable identifier for the repo |

@@ -90,6 +90,55 @@ Use Actions → Run workflow to manually trigger `.github/workflows/pages.yml` w
 
 This structure keeps jobs focused and reduces duplication.
 
+## Release and Publishing
+
+Docker images are automatically published to GitHub Container Registry (GHCR) via `.github/workflows/publish-images.yaml`.
+
+### Publishing Triggers
+
+**Main Branch Pushes:**
+- Triggered on every push to `main`
+- Creates tags: `main` and `sha-<commit-short-sha>`
+- Example: `ghcr.io/mfittko/raged-api:main`, `ghcr.io/mfittko/raged-api:sha-abc1234`
+
+**Version Tag Pushes:**
+- Triggered on tags matching `v*.*.*` (e.g., `v0.6.0`)
+- Creates semantic version tags: `<version>`, `<major>.<minor>`, `<major>`, and `latest`
+- Example tag `v0.6.0` produces:
+  - `ghcr.io/mfittko/raged-api:0.6.0`
+  - `ghcr.io/mfittko/raged-api:0.6`
+  - `ghcr.io/mfittko/raged-api:0`
+  - `ghcr.io/mfittko/raged-api:latest`
+
+### Published Images
+
+All three core components are published:
+- **API:** `ghcr.io/mfittko/raged-api`
+- **CLI/Indexer:** `ghcr.io/mfittko/raged`
+- **Worker:** `ghcr.io/mfittko/raged-worker`
+
+### Creating a Release
+
+To publish a new version:
+
+```bash
+# Create and push a version tag
+git tag v0.6.0
+git push origin v0.6.0
+
+# The publish-images workflow will automatically:
+# 1. Build all three images with multi-arch support (amd64, arm64)
+# 2. Push to GHCR with semantic version tags
+# 3. Update the 'latest' tag
+```
+
+### Image Features
+
+- **Multi-architecture:** All images support `linux/amd64` and `linux/arm64`
+- **OCI labels:** Images include standard metadata (title, description, source, version)
+- **Build cache:** GitHub Actions cache is used to speed up subsequent builds
+- **Least-privilege:** Uses GitHub's `GITHUB_TOKEN` with `packages: write` permission
+
 ## Worker Dependency Files
 
 Worker dependencies are split by purpose:

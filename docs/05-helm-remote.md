@@ -65,14 +65,26 @@ graph TD
 
 ## Build & Push Images
 
+Official images are automatically published to GitHub Container Registry (GHCR) from this repository:
+
+- **API:** `ghcr.io/mfittko/raged-api`
+- **CLI/Indexer:** `ghcr.io/mfittko/raged`
+- **Worker:** `ghcr.io/mfittko/raged-worker`
+
+Images are published on:
+- Every push to `main` (tagged with `main` and `sha-<commit>`)
+- Every version tag (e.g., `v0.6.0` creates tags `0.6.0`, `0.6`, `0`, and `latest`)
+
+For custom builds:
+
 ```bash
 # API
-docker build -t your-registry/raged-api:0.5.0 ./api
-docker push your-registry/raged-api:0.5.0
+docker build -t ghcr.io/mfittko/raged-api:custom ./api
+docker push ghcr.io/mfittko/raged-api:custom
 
 # CLI (for in-cluster indexing)
-docker build -t your-registry/raged:0.5.0 ./cli
-docker push your-registry/raged:0.5.0
+docker build -t ghcr.io/mfittko/raged:custom ./cli
+docker push ghcr.io/mfittko/raged:custom
 ```
 
 ## Install
@@ -81,34 +93,28 @@ docker push your-registry/raged:0.5.0
 
 ```bash
 helm install rag ./chart -n rag --create-namespace \
-  --set api.image.repository=your-registry/raged-api \
-  --set api.image.tag=0.5.0 \
   --set api.ingress.enabled=true \
   --set api.ingress.host=raged.example.com \
   --set api.auth.enabled=true \
   --set api.auth.token=REPLACE_ME
 ```
 
+*Note: The chart now defaults to official GHCR images. Override with `--set api.image.repository` and `--set api.image.tag` if needed.*
+
 ### Full Stack (with Enrichment & Knowledge Graph)
 
 ```bash
-# Build and push worker image
-docker build -t your-registry/raged-worker:0.5.0 ./worker
-docker push your-registry/raged-worker:0.5.0
-
 # Install with enrichment enabled
 helm install rag ./chart -n rag --create-namespace \
-  --set api.image.repository=your-registry/raged-api \
-  --set api.image.tag=0.5.0 \
   --set api.ingress.enabled=true \
   --set api.ingress.host=raged.example.com \
   --set api.auth.enabled=true \
   --set api.auth.token=REPLACE_ME \
   --set enrichment.enabled=true \
-  --set enrichment.worker.image.repository=your-registry/raged-worker \
-  --set enrichment.worker.image.tag=0.5.0 \
   --set postgres.auth.password=REPLACE_POSTGRES_PASSWORD
 ```
+
+*Note: Worker images are published to GHCR automatically. Custom worker builds can override with `--set enrichment.worker.image.repository` and `--set enrichment.worker.image.tag`.*
 
 ## Key Values
 
@@ -147,6 +153,15 @@ See [values.yaml](../chart/values.yaml) for the full list.
 ```bash
 helm upgrade rag ./chart -n rag \
   --set api.image.tag=0.6.0 \
+  --reuse-values
+```
+
+To upgrade to a specific version from GHCR:
+
+```bash
+helm upgrade rag ./chart -n rag \
+  --set api.image.tag=v0.6.0 \
+  --set enrichment.worker.image.tag=v0.6.0 \
   --reuse-values
 ```
 
