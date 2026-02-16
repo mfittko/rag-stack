@@ -24,26 +24,40 @@ export function translateFilter(
   for (const [key, value] of Object.entries(filter)) {
     if (key === "must") {
       // Array of conditions that must match
-      const mustConds = value as Array<{ key: string; match: { value: unknown } }>;
+      const mustConds = value as Array<{ key: string; match: { value?: unknown; text?: unknown } }>;
       for (const cond of mustConds) {
         const column = toAllowedColumn(cond.key);
-        conditions.push(`${tableAlias}.${column} = $${paramIndex}`);
-        params.push(cond.match.value);
+        const filterValue = cond.match.value ?? cond.match.text;
+        if (column === "path") {
+          conditions.push(`${tableAlias}.${column} LIKE $${paramIndex} || '%'`);
+        } else {
+          conditions.push(`${tableAlias}.${column} = $${paramIndex}`);
+        }
+        params.push(filterValue);
         paramIndex++;
       }
     } else if (key === "must_not") {
       // Array of conditions that must not match
-      const mustNotConds = value as Array<{ key: string; match: { value: unknown } }>;
+      const mustNotConds = value as Array<{ key: string; match: { value?: unknown; text?: unknown } }>;
       for (const cond of mustNotConds) {
         const column = toAllowedColumn(cond.key);
-        conditions.push(`${tableAlias}.${column} != $${paramIndex}`);
-        params.push(cond.match.value);
+        const filterValue = cond.match.value ?? cond.match.text;
+        if (column === "path") {
+          conditions.push(`${tableAlias}.${column} NOT LIKE $${paramIndex} || '%'`);
+        } else {
+          conditions.push(`${tableAlias}.${column} != $${paramIndex}`);
+        }
+        params.push(filterValue);
         paramIndex++;
       }
     } else {
       // Simple key-value filter
       const column = toAllowedColumn(key);
-      conditions.push(`${tableAlias}.${column} = $${paramIndex}`);
+      if (column === "path") {
+        conditions.push(`${tableAlias}.${column} LIKE $${paramIndex} || '%'`);
+      } else {
+        conditions.push(`${tableAlias}.${column} = $${paramIndex}`);
+      }
       params.push(value);
       paramIndex++;
     }
