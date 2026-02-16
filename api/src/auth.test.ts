@@ -138,4 +138,38 @@ describe("registerAuth", () => {
     expect(res.json()).toEqual({ ok: true });
     await app.close();
   });
+
+  it("logs a warning when token is shorter than 16 characters", async () => {
+    process.env.RAGED_API_TOKEN = "short";
+    const app = Fastify();
+    
+    // Capture log output
+    const warnings: string[] = [];
+    app.log.warn = (msg: any) => {
+      warnings.push(typeof msg === "string" ? msg : JSON.stringify(msg));
+    };
+    
+    registerAuth(app);
+    
+    expect(warnings.length).toBeGreaterThan(0);
+    expect(warnings[0]).toContain("RAGED_API_TOKEN is only 5 characters");
+    expect(warnings[0]).toContain("use at least 16 characters");
+    await app.close();
+  });
+
+  it("does not log a warning when token is 16 characters or longer", async () => {
+    process.env.RAGED_API_TOKEN = "exactly16chars!!"; // exactly 16 characters
+    const app = Fastify();
+    
+    // Capture log output
+    const warnings: string[] = [];
+    app.log.warn = (msg: any) => {
+      warnings.push(typeof msg === "string" ? msg : JSON.stringify(msg));
+    };
+    
+    registerAuth(app);
+    
+    expect(warnings.length).toBe(0);
+    await app.close();
+  });
 });
