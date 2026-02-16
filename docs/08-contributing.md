@@ -90,6 +90,82 @@ Use Actions → Run workflow to manually trigger `.github/workflows/pages.yml` w
 
 This structure keeps jobs focused and reduces duplication.
 
+## Release and Publishing
+
+Docker images are automatically published to GitHub Container Registry (GHCR) via `.github/workflows/publish-images.yaml`.
+
+### Publishing Triggers
+
+**Manual Dispatch:**
+- Triggered from the Actions UI or `gh workflow run`
+- Useful for validating build and publish behavior without pushing a new commit
+
+**Main Branch Pushes:**
+- Triggered on every push to `main`
+- Creates tags: `main` and `sha-<commit-short-sha>`
+- Example: `ghcr.io/mfittko/raged-api:main`, `ghcr.io/mfittko/raged-api:sha-abc1234`
+
+**Version Tag Pushes:**
+- Triggered on tags matching `v*.*.*` (e.g., `v0.6.0`)
+- Creates semantic version tags: `<version>`, `<major>.<minor>`, `<major>`, and `latest`
+- Example tag `v0.6.0` produces:
+  - `ghcr.io/mfittko/raged-api:0.6.0`
+  - `ghcr.io/mfittko/raged-api:0.6`
+  - `ghcr.io/mfittko/raged-api:0`
+  - `ghcr.io/mfittko/raged-api:latest`
+
+### Published Images
+
+All three core components are published:
+- **API:** `ghcr.io/mfittko/raged-api`
+- **CLI/Indexer:** `ghcr.io/mfittko/raged`
+- **Worker:** `ghcr.io/mfittko/raged-worker`
+
+### Creating a Release
+
+To publish a new version:
+
+```bash
+# Create tag + GitHub release notes from CHANGELOG.md
+export OPENAI_API_KEY=your_key_here
+scripts/create-release.sh v0.6.0
+
+# Or auto-increment the next stable semver tag
+scripts/create-release.sh --bump patch
+
+# Dry-run notes generation without pushing tag/release
+scripts/create-release.sh v0.6.0 --dry-run
+```
+
+The script will:
+- generate release title/body with OpenAI using `CHANGELOG.md`
+- create and push an annotated tag
+- create a GitHub release with the generated notes
+
+### Release Automation Gap
+
+Target direction: release automatically from `main` after merge.
+
+Current gap: we do not yet have remote-deployment smoke tests to validate the newly released image in an environment before finalizing a stable release. Until that exists, releases remain script-driven.
+
+When smoke-test infrastructure is available, automate release creation with a `main`-triggered workflow that:
+- builds and publishes candidate images
+- runs post-deploy smoke tests against a remote environment
+- creates the final stable tag and GitHub release only if smoke tests pass
+
+The publish-images workflow will automatically build and publish all three images with multi-arch support (`linux/amd64`, `linux/arm64`) and semantic tags (`0.6.0`, `0.6`, `0`, `latest`).
+
+**Note:** 
+- Git tags use the `v` prefix (e.g., `v0.6.0`), but Docker image tags do not (e.g., `0.6.0`). Always reference images without the `v` prefix in Helm values and deployment configurations.
+- The `latest` tag is updated only on version tag pushes. Main branch pushes publish `main` and `sha-*` tags for development builds.
+
+### Image Features
+
+- **Multi-architecture:** All images support `linux/amd64` and `linux/arm64`
+- **OCI labels:** Images include standard metadata (title, description, source, version)
+- **Build cache:** GitHub Actions cache is used to speed up subsequent builds
+- **Least-privilege:** Uses GitHub's `GITHUB_TOKEN` with `packages: write` permission
+
 ## Worker Dependency Files
 
 Worker dependencies are split by purpose:
