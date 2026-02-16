@@ -83,4 +83,3 @@ describe("validateConfig", () => {
     expect(errors.some(e => e.includes("QDRANT_URL"))).toBe(true);
   });
 });
-
