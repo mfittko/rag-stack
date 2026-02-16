@@ -1,14 +1,14 @@
 #!/usr/bin/env bash
 #
-# generate-changelog-entry.sh
+# generate-changelog.sh
 #
 # Generates a changelog entry for a PR using the OpenAI API and merges it into CHANGELOG.md.
 # If an entry for the same PR already exists, it will be replaced. Other entries are preserved.
 #
 # Usage:
-#   ./generate-changelog-entry.sh [--dry-run]                  # Uses current branch's PR
-#   ./generate-changelog-entry.sh [PR_NUMBER] [--dry-run]
-#   ./generate-changelog-entry.sh --backfill [--clear]
+#   ./generate-changelog.sh [--dry-run]                  # Uses current branch's PR
+#   ./generate-changelog.sh [PR_NUMBER] [--dry-run]
+#   ./generate-changelog.sh --backfill [--clear]
 #
 # Options:
 #   --dry-run    Print the entry without modifying CHANGELOG.md
@@ -66,7 +66,7 @@ done
 CHANGELOG_PATH="${CHANGELOG_PATH:-CHANGELOG.md}"
 MAX_PRS="${MAX_PRS:-1000}"
 MAX_RETRIES="${MAX_RETRIES:-3}"
-BACKOFF_BASE_SECONDS="${BACKOFF_BASE_SECONDS:-1}"
+BACKOFF_BASE_SECONDS="${BACKOFF_BASE_SECONDS:-2}"
 DEBUG_DIR="${DEBUG_DIR:-tmp/changelog-debug}"
 MAX_OUTPUT_TOKENS="${MAX_OUTPUT_TOKENS:-8000}"
 MAX_OUTPUT_TOKENS_CAP="${MAX_OUTPUT_TOKENS_CAP:-16000}"
@@ -181,10 +181,16 @@ fi
 # Fetch PR metadata using gh CLI
 if [[ -n "$PR_NUMBER" ]]; then
   echo "Fetching PR #${PR_NUMBER} metadata..." >&2
-  PR_JSON=$(gh pr view "$PR_NUMBER" --json number,title,body,additions,deletions,changedFiles,files,url,closedAt)
+  if ! PR_JSON=$(gh pr view "$PR_NUMBER" --json number,title,body,additions,deletions,changedFiles,files,url,closedAt); then
+    echo "Error: Failed to fetch metadata for PR #${PR_NUMBER}. Ensure the PR exists and you have access to it." >&2
+    exit 1
+  fi
 else
   echo "Fetching current branch PR metadata..." >&2
-  PR_JSON=$(gh pr view --json number,title,body,additions,deletions,changedFiles,files,url,closedAt)
+  if ! PR_JSON=$(gh pr view --json number,title,body,additions,deletions,changedFiles,files,url,closedAt); then
+    echo "Error: No PR found for current branch. Specify a PR number or run from a PR branch." >&2
+    exit 1
+  fi
   PR_NUMBER=$(echo "$PR_JSON" | jq -r '.number')
 fi
 
@@ -307,10 +313,20 @@ while [[ "$ATTEMPT" -le "$MAX_RETRIES" ]]; do
     }')
 
   DEBUG_BASE="${DEBUG_DIR}/pr-${PR_NUMBER}-attempt-${ATTEMPT}-$(date +%s)"
-  RESPONSE=$(curl -s -X POST "https://api.openai.com/v1/responses" \
+  if ! RESPONSE=$(curl -sS -X POST "https://api.openai.com/v1/responses" \
     -H "Content-Type: application/json" \
     -H "Authorization: Bearer ${OPENAI_API_KEY}" \
-    -d "$JSON_PAYLOAD")
+    -d "$JSON_PAYLOAD"); then
+    echo "Attempt ${ATTEMPT}/${MAX_RETRIES}: Failed to reach OpenAI API" >&2
+    write_debug_artifacts "$DEBUG_BASE" "$JSON_PAYLOAD" ""
+    if [[ "$ATTEMPT" -lt "$MAX_RETRIES" ]]; then
+      BACKOFF_SECONDS=$((BACKOFF_BASE_SECONDS ** ATTEMPT))
+      echo "Retrying in ${BACKOFF_SECONDS}s..." >&2
+      sleep "$BACKOFF_SECONDS"
+    fi
+    ATTEMPT=$((ATTEMPT + 1))
+    continue
+  fi
 
   if [[ -z "$RESPONSE" ]]; then
     echo "Attempt ${ATTEMPT}/${MAX_RETRIES}: Empty response from OpenAI API" >&2
@@ -461,6 +477,12 @@ fi
 
 # Write new section to a temp file for reliable insertion
 SECTION_FILE=$(mktemp)
+cleanup_temp_files() {
+  if [[ -n "${SECTION_FILE:-}" ]]; then
+    rm -f "$SECTION_FILE"
+  fi
+}
+trap cleanup_temp_files EXIT
 echo "$NEW_SECTION" > "$SECTION_FILE"
 
 # Check if today's date section exists
@@ -481,13 +503,19 @@ if grep -q "## $TODAY" "$CHANGELOG_PATH"; then
     END_LINE=$(wc -l < "$CHANGELOG_PATH")
   fi
   
+  FILE_LENGTH=$(wc -l < "$CHANGELOG_PATH")
+
   # Build new file: before section + new section + after section
   {
-    head -n "$START_LINE" "$CHANGELOG_PATH"
+    head -n $((START_LINE - 1)) "$CHANGELOG_PATH"
+    echo ""
+    echo "## $TODAY"
     echo ""
     cat "$SECTION_FILE"
     echo ""
-    tail -n +$((END_LINE + 1)) "$CHANGELOG_PATH"
+    if (( END_LINE < FILE_LENGTH )); then
+      tail -n +$((END_LINE + 1)) "$CHANGELOG_PATH"
+    fi
   } > "${CHANGELOG_PATH}.tmp"
   mv "${CHANGELOG_PATH}.tmp" "$CHANGELOG_PATH"
 else
@@ -507,12 +535,9 @@ else
     mv "${CHANGELOG_PATH}.tmp" "$CHANGELOG_PATH"
   else
     echo "Error: Could not find --- separator in $CHANGELOG_PATH" >&2
-    rm -f "$SECTION_FILE"
     exit 1
   fi
 fi
-
-rm -f "$SECTION_FILE"
 
 echo "Updated $CHANGELOG_PATH for $TODAY:"
 if is_debug_enabled; then

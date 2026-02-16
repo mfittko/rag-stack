@@ -11,11 +11,10 @@ concurrency:
 jobs:
   generate-changelog:
     name: Generate Changelog Entry
-    if: github.event.review.state == 'approved'
+    if: github.event.review.state == 'approved' && github.event.pull_request.head.repo.full_name == github.repository
     runs-on: ubuntu-latest
     permissions:
       contents: write
-      pull-requests: write
     steps:
       - uses: actions/checkout@v4
         with:
@@ -39,5 +38,5 @@ jobs:
             echo "No changelog updates to commit."
             exit 0
           fi
-          git commit -m "docs: add changelog entry for PR #${{ github.event.pull_request.number }}"
+          git commit -m "docs: add changelog entry for PR #${{ github.event.pull_request.number }} [skip ci]"
           git push
