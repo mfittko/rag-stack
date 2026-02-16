@@ -24,10 +24,30 @@ jobs:
       - name: Setup Pages
         uses: actions/configure-pages@v5
 
-      - name: "Build with Jekyll (source: docs -> public)"
+      - name: Prepare public docs directory
+        run: |
+          rm -rf ./docs_public
+          rsync -av --delete ./docs/ ./docs_public/ \
+            --exclude 'plans/**' \
+            --exclude 'AGENTS.md'
+
+      - name: Add front matter for Jekyll rendering
+        run: |
+          while IFS= read -r file; do
+            if ! grep -q '^---$' "$file"; then
+              tmp_file="${file}.tmp"
+              {
+                printf -- '---\n---\n\n'
+                cat "$file"
+              } > "$tmp_file"
+              mv "$tmp_file" "$file"
+            fi
+          done < <(find ./docs_public -type f -name '*.md')
+
+      - name: "Build with Jekyll (source: docs_public -> public)"
         uses: actions/jekyll-build-pages@v1
         with:
-          source: ./docs
+          source: ./docs_public
           destination: ./public
 
       - name: Upload artifact
