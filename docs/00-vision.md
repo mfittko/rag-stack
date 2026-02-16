@@ -25,19 +25,17 @@ graph TD
     A3[AI Agent N] -->|HTTP| API
     CLI -->|HTTP| API[RAG API<br/>Fastify]
     API -->|embed| OL[Ollama<br/>nomic-embed-text]
-    API -->|similarity search| QD[Qdrant<br/>Vector DB]
-    API -->|entity traversal| NEO[Neo4j<br/>Knowledge Graph]
-    API -->|enqueue task| RD[Redis Queue]
-    WK[Enrichment Worker] -->|extract entities| NEO
-    WK -->|process tasks| RD
-    WK -->|update chunks| QD
+    API -->|similarity search| PG[Postgres + pgvector]
+    API -->|entity traversal| PG
+    API -->|enqueue task| PG
+    WK[Enrichment Worker] -->|extract entities| PG
+    WK -->|process tasks| PG
+    WK -->|update chunks| PG
     CLI -->|ingest| API
 
     style API fill:#e1f5fe
-    style QD fill:#f3e5f5
+    style PG fill:#f3e5f5
     style OL fill:#e8f5e9
-    style NEO fill:#fce4ec
-    style RD fill:#fff9c4
     style WK fill:#e0f2f1
 ```
 
@@ -62,12 +60,12 @@ What exists:
 - ✅ **8 document types:** code, Slack, email, meeting notes, images, PDFs, articles, text
 - ✅ **Auto-detection:** Document type inference from file extension and content
 - ✅ **Pluggable LLM adapter:** Ollama (local), Anthropic, OpenAI with smart model routing
-- ✅ **Async enrichment worker** in Python with Redis task queue
+- ✅ **Async enrichment worker** in Python with Postgres task queue
 - ✅ **Retry logic:** Exponential backoff with dead-letter queue for failed tasks
 - ✅ **Status tracking:** Per-document enrichment status via `/enrichment/status/:baseId`
 
 **Knowledge graph:**
-- ✅ **Neo4j graph storage:** Entity and relationship storage with indexed lookups
+- ✅ **Postgres graph storage:** Entity and relationship storage with indexed lookups
 - ✅ **Entity extraction:** NER via spaCy (tier-2) and LLM-based extraction (tier-3)
 - ✅ **Relationship extraction:** Automatic discovery of entity relationships
 - ✅ **Hybrid retrieval:** Vector search + graph expansion via `graphExpand` parameter
@@ -87,10 +85,10 @@ What exists:
 - ✅ `--no-enrich` / `--doc-type` flags on ingest commands (enrichment is on by default when enabled server-side)
 
 **Infrastructure:**
-- ✅ Docker Compose profiles: `--profile enrichment` for full stack (Redis, Neo4j, worker)
+- ✅ Docker Compose profiles: `--profile enrichment` for full stack (Postgres, worker)
 - ✅ Helm chart: all enrichment resources gated on `enrichment.enabled`
 - ✅ Backwards-compatible: existing API/CLI behavior unchanged when enrichment disabled
-- ✅ Environment-driven configuration: `ENRICHMENT_ENABLED`, `NEO4J_URL`, `REDIS_URL`
+- ✅ Environment-driven configuration: `ENRICHMENT_ENABLED`, `POSTGRES_URL`
 
 ### v2.0 — Production Hardening + Multi-Agent Hub (planned)
 
@@ -98,7 +96,7 @@ What exists:
 - **Testing:** Comprehensive unit and integration test coverage
 - **Input validation:** JSON Schema on all API routes (in progress)
 - **Multiple embedding providers:** Adapter pattern — swap Ollama for OpenAI, Cohere, or local alternatives
-- **Pluggable vector backends:** Qdrant today, Pinecone/Weaviate/pgvector via adapters
+- **Alternative storage backends:** Postgres today, support for Pinecone/Weaviate/Qdrant via adapters
 - **Rate limiting and request throttling**
 - **Structured logging and health checks** (beyond `/healthz`)
 - **API versioning** (`/v1/ingest`, `/v1/query`)

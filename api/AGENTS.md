@@ -10,7 +10,7 @@ src/
   auth.ts       → Authentication hook (bearer token)
   chunking.ts   → Text chunking logic
   ollama.ts     → Embedding client (Ollama HTTP API)
-  qdrant.ts     → Vector DB client (Qdrant REST API)
+  db.ts         → Postgres client and migrations
 ```
 
 ## Rules
@@ -29,9 +29,9 @@ Every route must validate its input. Use Fastify's built-in JSON Schema validati
 
 ### Single Responsibility Per Module
 
-- `chunking.ts` — only text chunking. No embedding, no HTTP, no Qdrant.
-- `ollama.ts` — only embedding via Ollama. No chunking, no Qdrant.
-- `qdrant.ts` — only Qdrant collection management and client export. No embedding, no chunking.
+- `chunking.ts` — only text chunking. No embedding, no HTTP, no database.
+- `ollama.ts` — only embedding via Ollama. No chunking, no database.
+- `db.ts` — only Postgres client and migrations. No embedding, no chunking.
 - `auth.ts` — only authentication. No business logic.
 
 If a new concern appears (e.g., caching, rate limiting), create a new module.
@@ -50,16 +50,9 @@ All configuration is via environment variables. Document every env var in this f
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `QDRANT_URL` | `http://qdrant:6333` | Qdrant server URL |
+| `DATABASE_URL` | `postgresql://raged:raged@postgres:5432/raged` | Postgres connection URL |
 | `OLLAMA_URL` | `http://ollama:11434` | Ollama server URL |
-| `QDRANT_COLLECTION` | `docs` | Default collection name |
-| `VECTOR_SIZE` | `768` | Embedding vector dimensions |
-| `DISTANCE` | `Cosine` | Qdrant distance metric |
 | `EMBED_MODEL` | `nomic-embed-text` | Ollama embedding model |
 | `PORT` | `8080` | API listen port |
 | `RAGED_API_TOKEN` | _(empty)_ | Bearer token for auth (empty = auth disabled) |
-| `ENRICHMENT_ENABLED` | `false` | Enable enrichment queue processing (requires `REDIS_URL`) |
-| `REDIS_URL` | _(empty)_ | Redis connection URL for enrichment queue (empty = enrichment disabled) |
-| `NEO4J_URL` | _(empty)_ | Neo4j connection URL (e.g., `bolt://neo4j:7687`) (empty = graph disabled) |
-| `NEO4J_USER` | `neo4j` | Neo4j username |
-| `NEO4J_PASSWORD` | _(empty)_ | Neo4j password (empty = graph disabled) |
+| `ENRICHMENT_ENABLED` | `false` | Enable enrichment queue processing |

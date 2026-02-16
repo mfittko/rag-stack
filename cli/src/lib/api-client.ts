@@ -77,7 +77,7 @@ export async function getGraphEntity(api: string, entity: string, token?: string
       return null;
     }
     if (res.status === 503) {
-      throw new Error("Graph functionality is not enabled (Neo4j not configured).");
+      throw new Error("Graph functionality is not enabled.");
     }
     throw new Error(`Failed to get entity: ${res.status} ${await res.text()}`);
   }

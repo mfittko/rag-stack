@@ -16,7 +16,7 @@ export function registerErrorHandler(app: FastifyInstance): void {
         });
       }
 
-      // Upstream service errors (Ollama, Qdrant) — surface as 502
+      // Upstream service errors (Ollama, Postgres) — surface as 502
       // Log full upstream error details server-side, but do not expose them to the client
       const upstreamError = error as FastifyError & { code?: string };
       if (

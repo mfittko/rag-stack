@@ -24,11 +24,6 @@ export function validateConfig(): string[] {
     errors.push("OLLAMA_URL is required for embedding generation (e.g., http://localhost:11434)");
   }
 
-  // QDRANT_URL is required only for the legacy vector path
-  if (process.env.LEGACY_QDRANT_VECTOR_ENABLED === "true" && !process.env.QDRANT_URL) {
-    errors.push("QDRANT_URL is required for legacy Qdrant vector storage (e.g., http://localhost:6333)");
-  }
-
   return errors;
 }
 

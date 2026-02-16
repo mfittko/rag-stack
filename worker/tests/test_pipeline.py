@@ -25,7 +25,6 @@ def mock_task():
     """Create a mock task."""
     return {
         "taskId": "task-123",
-        "qdrantId": "repo:file.py:0",
         "collection": "docs",
         "docType": "code",
         "baseId": "repo:file.py",
@@ -100,7 +99,6 @@ async def test_process_task_multi_chunk_middle(mock_task):
     """Test processing a middle chunk of a multi-chunk document."""
     mock_task["chunkIndex"] = 1
     mock_task["totalChunks"] = 3
-    mock_task["qdrantId"] = "repo:file.py:1"
 
     with patch("src.pipeline.api_client") as mock_api_client:
         # Mock API client operations
@@ -123,7 +121,6 @@ async def test_process_task_multi_chunk_last(mock_task):
     """Test processing the last chunk of a multi-chunk document."""
     mock_task["chunkIndex"] = 2
     mock_task["totalChunks"] = 3
-    mock_task["qdrantId"] = "repo:file.py:2"
     mock_task["allChunks"] = [
         "First chunk text",
         "Second chunk text",

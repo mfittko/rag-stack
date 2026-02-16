@@ -24,7 +24,7 @@ node dist/index.js index --repo <git-url> [options]
 |------|---------|-------------|
 | `--repo` | _(required)_ | Git URL to clone |
 | `--api` | `http://localhost:8080` | RAG API URL |
-| `--collection` | `docs` | Qdrant collection name |
+| `--collection` | `docs` | Collection name |
 | `--branch` | _(default branch)_ | Git branch to clone |
 | `--repoId` | _(repo URL)_ | Stable identifier for this repo |
 | `--token` | _(env `RAGED_API_TOKEN`)_ | Bearer token for auth |
@@ -49,7 +49,7 @@ node dist/index.js query --q "<search text>" [options]
 |------|---------|-------------|
 | `--q` / `--query` | _(required)_ | Search query text |
 | `--api` | `http://localhost:8080` | RAG API URL |
-| `--collection` | `docs` | Qdrant collection name |
+| `--collection` | `docs` | Collection name |
 | `--topK` | `8` | Number of results to return |
 | `--repoId` | _(none)_ | Filter by repository ID |
 | `--pathPrefix` | _(none)_ | Filter by file path prefix |
@@ -70,7 +70,7 @@ node dist/index.js ingest --dir <path> [options]
 | `--file` | - | Single file to ingest (mutually exclusive with --dir) |
 | `--dir` | - | Directory to ingest (mutually exclusive with --file) |
 | `--api` | `http://localhost:8080` | RAG API URL |
-| `--collection` | `docs` | Qdrant collection name |
+| `--collection` | `docs` | Collection name |
 | `--token` | _(env `RAGED_API_TOKEN`)_ | Bearer token for auth |
 | `--maxFiles` | `4000` | Maximum files to process from directory |
 | `--enrich` | `true` | Enable async enrichment |
@@ -94,7 +94,7 @@ node dist/index.js enrich [options]
 | Flag | Default | Description |
 |------|---------|-------------|
 | `--api` | `http://localhost:8080` | RAG API URL |
-| `--collection` | `docs` | Qdrant collection name |
+| `--collection` | `docs` | Collection name |
 | `--token` | _(env `RAGED_API_TOKEN`)_ | Bearer token for auth |
 | `--force` | `false` | Re-enqueue all items (including already-enriched) |
 | `--stats-only` | `false` | Show enrichment stats without enqueueing |

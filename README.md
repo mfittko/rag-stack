@@ -7,19 +7,15 @@ graph LR
     Agent[AI Agent] -->|"raged query"| CLI[CLI]
     CLI -->|HTTP| API[RAGED API]
     API -->|embed| Ollama
-    API -->|search| Qdrant
-    API -->|graph expand| Neo4j
-    API -->|enqueue| Redis
-    Worker -->|process| Redis
-    Worker -->|extract| Neo4j
-    Worker -->|update| Qdrant
+    API -->|vectors + entities + queue| Postgres[Postgres + pgvector]
+    API -->|large files| SeaweedFS[SeaweedFS S3]
+    Worker -->|/internal/*| API
     Worker -->|"extract (tier-3)"| Ollama
 
     style API fill:#e1f5fe
-    style Qdrant fill:#f3e5f5
+    style Postgres fill:#f3e5f5
     style Ollama fill:#e8f5e9
-    style Neo4j fill:#fce4ec
-    style Redis fill:#fff9c4
+    style SeaweedFS fill:#fff9c4
     style Worker fill:#e0f2f1
 ```
 
@@ -27,19 +23,22 @@ graph LR
 
 1. **Ingest** text or URLs — send content directly to the API via HTTP, fetch web pages/PDFs server-side, or use the CLI to bulk-index Git repositories
 2. **Embed** each chunk using a local model (Ollama + nomic-embed-text)
-3. **Store** embeddings in Qdrant (vector DB)
+3. **Store** embeddings in Postgres with pgvector
 4. **Query** by natural language — semantic similarity search for context-rich results
 
-AI agents (Claude Code, OpenClaw, or any HTTP/CLI-capable agent) use this to retrieve grounded context without stuffing entire knowledge bases into their context window. Vector search finds *what's relevant*; knowledge graph traversal finds *what's connected*.
+AI agents (Claude Code, OpenClaw, or any HTTP/CLI-capable agent) use this to retrieve grounded context without stuffing entire knowledge bases into their context window. Vector search finds *what's relevant*; entity relationships find *what's connected*.
 
 ## Quickstart
 
 ```bash
-# Start the base stack (Qdrant, Ollama, API)
+# Start the base stack (Postgres, Ollama, API)
 docker compose up -d
 
-# Or start with enrichment and knowledge graph
+# Or start with enrichment worker
 docker compose --profile enrichment up -d
+
+# Or with optional blob storage
+docker compose --profile storage --profile enrichment up -d
 
 # Pull the embedding model (first time only)
 curl http://localhost:11434/api/pull -d '{"name":"nomic-embed-text"}'
@@ -104,10 +103,9 @@ node dist/index.js query \
 | Component | Role | Tech |
 |-----------|------|------|
 | **RAGED API** | Chunk, embed, store, search, orchestrate enrichment | Fastify, Node.js |
-| **Qdrant** | Vector storage and similarity search | Qdrant v1.10 |
+| **Postgres** | Vector storage (pgvector), entities, task queue | Postgres 17 + pgvector |
 | **Ollama** | Local embedding and LLM runtime | nomic-embed-text (768d), llama3, llava |
-| **Redis** | Enrichment task queue *(optional)* | Redis 7 |
-| **Neo4j** | Knowledge graph storage *(optional)* | Neo4j 5 Community |
+| **SeaweedFS** | Optional S3-compatible blob storage for large files | SeaweedFS 3.80 |
 | **Enrichment Worker** | Async metadata extraction *(optional)* | Python, spaCy, asyncio |
 | **CLI** | Bulk-index Git repos and query from terminal | Node.js, TypeScript |
 | **Helm Chart** | Kubernetes deployment | Helm 3 |

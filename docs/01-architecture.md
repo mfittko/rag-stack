@@ -12,27 +12,21 @@ graph TD
     CLI -->|"GET /graph/entity/:name"| API
     
     API -->|"POST /api/embeddings"| OL[Ollama<br/>:11434]
-    API -->|"upsert / search"| QD[Qdrant<br/>:6333]
-    API -->|"enqueue task"| RD[Redis Queue<br/>:6379]
-    API -->|"query entities"| NEO[Neo4j Graph<br/>:7687]
+    API -->|"upsert / search"| PG[Postgres + pgvector<br/>:5432]
     
-    WK[Enrichment Worker] -->|"BRPOP task"| RD
-    WK -->|"read/update payload"| QD
+    WK[Enrichment Worker] -->|"SKIP LOCKED dequeue"| PG
+    WK -->|"read/update payload"| PG
     WK -->|"NLP + LLM extraction"| OL
-    WK -->|"upsert entities"| NEO
+    WK -->|"upsert entities"| PG
 
     subgraph Storage
-        QD
+        PG
         OL
-        RD
-        NEO
     end
 
     style API fill:#e1f5fe
-    style QD fill:#f3e5f5
+    style PG fill:#f3e5f5
     style OL fill:#e8f5e9
-    style RD fill:#fff9c4
-    style NEO fill:#fce4ec
     style WK fill:#e0f2f1
 ```
 
@@ -43,8 +37,8 @@ graph TD
 Stateless HTTP service exposing core endpoints:
 
 **Ingestion & Query:**
-- `POST /ingest` — Receives text items or URLs (code, docs, PDFs, images, web pages, etc.), optionally fetches URL content server-side with SSRF protection, runs tier-1 extraction, chunks, embeds via Ollama, upserts vectors into Qdrant, optionally enqueues enrichment
-- `POST /query` — Embeds the query text, performs similarity search in Qdrant, optionally expands entities via Neo4j, returns ranked results
+- `POST /ingest` — Receives text items or URLs (code, docs, PDFs, images, web pages, etc.), optionally fetches URL content server-side with SSRF protection, runs tier-1 extraction, chunks, embeds via Ollama, upserts vectors into Postgres, optionally enqueues enrichment
+- `POST /query` — Embeds the query text, performs similarity search in Postgres using pgvector, optionally expands entities from Postgres relationships, returns ranked results
 
 **Enrichment:**
 - `GET /enrichment/status/:baseId` — Get enrichment status for a document
@@ -52,16 +46,16 @@ Stateless HTTP service exposing core endpoints:
 - `POST /enrichment/enqueue` — Manually trigger enrichment for existing chunks
 
 **Knowledge Graph:**
-- `GET /graph/entity/:name` — Lookup entity details and connections in Neo4j
+- `GET /graph/entity/:name` — Lookup entity details and connections in Postgres
 
 **Health:**
 - `GET /healthz` — Always unauthenticated, returns `{ ok: true }`
 
-### Qdrant (Vector DB)
+### Postgres + pgvector (Vector DB)
 
-Stores embedding vectors with metadata payloads. Each collection holds vectors of a fixed dimension (768 for nomic-embed-text) using cosine distance.
+Stores embedding vectors with metadata in Postgres tables using the pgvector extension. Each collection holds vectors of a fixed dimension (768 for nomic-embed-text) with cosine distance search support.
 
-Metadata payload per point:
+Metadata per chunk:
 - `text` — the original chunk text
 - `source` — source URL or path
 - `chunkIndex` — position of chunk within the original document
@@ -73,28 +67,29 @@ Metadata payload per point:
 
 Runs the `nomic-embed-text` model locally for embeddings, and LLM models (llama3, llava) for tier-3 extraction. The API calls Ollama's `/api/embeddings` endpoint for each text chunk. Produces 768-dimensional vectors.
 
-### Redis (Task Queue)
+### Postgres Task Queue
 
-Holds enrichment tasks in two queues:
-- `enrichment:pending` — tasks waiting for processing
-- `enrichment:dead-letter` — failed tasks after max retries
+Holds enrichment tasks using a Postgres table with SKIP LOCKED for concurrent processing:
+- `enrichment_tasks` table — tasks with status tracking
+- Workers use `FOR UPDATE SKIP LOCKED` to claim tasks without contention
+- Failed tasks tracked via status field after max retries
 
-### Neo4j (Knowledge Graph)
+### Postgres Entities & Relationships
 
-Stores entities and relationships extracted from documents. Supports graph traversal for hybrid vector+graph retrieval.
+Stores entities and relationships extracted from documents in Postgres tables. Supports graph traversal for hybrid vector+graph retrieval.
 
-Node types: Entity (with properties: name, type, description)
+Database schema includes: `entities` table (with columns: name, type, description), `relationships` table (with source, target, relationship type)
 Relationship types: Configurable based on extraction (e.g., `uses`, `relates_to`, `mentions`)
 
 ### Enrichment Worker (Python)
 
 Async background service that:
-1. Pulls enrichment tasks from Redis (`BRPOP`)
+1. Pulls enrichment tasks from Postgres using `FOR UPDATE SKIP LOCKED`
 2. Runs tier-2 extraction (spaCy NER, TextRank keywords, language detection)
 3. Runs tier-3 extraction (LLM-based summaries and entity extraction via pluggable provider)
-4. Updates Qdrant chunk payloads with `tier2`/`tier3` metadata
-5. Upserts entities and relationships to Neo4j
-6. Moves failed tasks to dead-letter queue after max retries
+4. Updates Postgres chunk records with `tier2`/`tier3` metadata
+5. Upserts entities and relationships to Postgres
+6. Updates task status to failed after max retries
 
 ### URL Ingestion Flow
 
@@ -108,7 +103,7 @@ sequenceDiagram
     participant Web as External Web
     participant Extract as Content Extractor
     participant Embed as Ollama
-    participant QD as Qdrant
+    participant PG as Postgres
 
     Client->>API: POST /ingest {url}
     API->>SSRF: Validate URL (no private IPs, DNS rebind check)
@@ -120,8 +115,8 @@ sequenceDiagram
     API->>API: Chunk text
     API->>Embed: Embed chunks
     Embed-->>API: Vectors
-    API->>QD: Upsert with fetch metadata
-    QD-->>API: Success
+    API->>PG: Upsert with fetch metadata
+    PG-->>API: Success
     API-->>Client: {ok: true, upserted: N}
 ```
 
@@ -157,10 +152,7 @@ sequenceDiagram
     participant C as CLI
     participant A as RAG API
     participant O as Ollama
-    participant Q as Qdrant
-    participant R as Redis
-    participant W as Worker
-    participant N as Neo4j
+    participant P as Postgres
 
     U->>C: raged index --repo <url>
     C->>C: git clone (shallow)
@@ -173,23 +165,23 @@ sequenceDiagram
             A->>O: POST /api/embeddings
             O-->>A: 768d vector
         end
-        A->>Q: upsert(points with enrichmentStatus: pending)
-        Q-->>A: OK
-        A->>R: LPUSH enrichment:pending
+        A->>P: upsert(chunks with enrichmentStatus: pending)
+        P-->>A: OK
+        A->>P: INSERT enrichment task
         A-->>C: { ok, upserted }
     end
     C-->>U: Done. repoId=<id>
     
-    W->>R: BRPOP enrichment:pending
-    R-->>W: Task { baseId, collection, totalChunks }
-    W->>Q: Get chunks by baseId
-    Q-->>W: Chunk payloads
+    W->>P: SELECT FOR UPDATE SKIP LOCKED
+    P-->>W: Task { baseId, collection, totalChunks }
+    W->>P: Get chunks by baseId
+    P-->>W: Chunk records
     W->>W: Tier-2: spaCy NER, keywords, lang
     W->>O: Tier-3: LLM extraction
     O-->>W: Summary, entities
-    W->>Q: Update payloads with tier2/tier3
-    W->>N: Upsert entities + relationships
-    N-->>W: OK
+    W->>P: Update chunks with tier2/tier3
+    W->>P: Upsert entities + relationships
+    P-->>W: OK
 ```
 
 ## Index Data Flow
@@ -200,7 +192,7 @@ sequenceDiagram
     participant C as CLI
     participant A as RAG API
     participant O as Ollama
-    participant Q as Qdrant
+    participant P as Postgres
 
     U->>C: raged index --repo <url>
     C->>C: git clone (shallow)
@@ -212,8 +204,8 @@ sequenceDiagram
             A->>O: POST /api/embeddings
             O-->>A: 768d vector
         end
-        A->>Q: upsert(points)
-        Q-->>A: OK
+        A->>P: upsert(chunks)
+        P-->>A: OK
         A-->>C: { ok, upserted }
     end
     C-->>U: Done. repoId=<id>
@@ -229,14 +221,14 @@ sequenceDiagram
     participant C as CLI
     participant A as RAG API
     participant O as Ollama
-    participant Q as Qdrant
+    participant P as Postgres
 
     U->>C: raged query --q "auth flow"
     C->>A: POST /query { query, topK }
     A->>O: POST /api/embeddings { prompt }
     O-->>A: 768d vector
-    A->>Q: search(vector, limit, filter)
-    Q-->>A: Ranked results
+    A->>P: search(vector, limit, filter) using pgvector
+    P-->>A: Ranked results
     A-->>C: { results: [...] }
     C-->>U: Display results
 ```
@@ -249,18 +241,17 @@ sequenceDiagram
     participant C as CLI
     participant A as RAG API
     participant O as Ollama
-    participant Q as Qdrant
-    participant N as Neo4j
+    participant P as Postgres
 
     U->>C: raged query --q "auth flow" (with graphExpand)
     C->>A: POST /query { query, topK, graphExpand: true }
     A->>O: POST /api/embeddings { prompt }
     O-->>A: 768d vector
-    A->>Q: search(vector, limit, filter)
-    Q-->>A: Ranked results with tier2/tier3 metadata
+    A->>P: search(vector, limit, filter) using pgvector
+    P-->>A: Ranked results with tier2/tier3 metadata
     A->>A: Extract entities from results
-    A->>N: expandEntities(entities, depth=2)
-    N-->>A: Expanded entity graph
+    A->>P: expandEntities(entities, depth=2) via relationships table
+    P-->>A: Expanded entity graph
     A-->>C: { results: [...], graph: {...} }
     C-->>U: Display results + related entities
 ```

@@ -1,6 +1,6 @@
 # In-Cluster Indexing
 
-Run the indexer as a Kubernetes Job inside the cluster, close to the API and Qdrant — no need to upload repo contents from your laptop.
+Run the indexer as a Kubernetes Job inside the cluster, close to the API and Postgres — no need to upload repo contents from your laptop.
 
 ## How It Works
 
@@ -10,14 +10,14 @@ sequenceDiagram
     participant J as Indexer Job
     participant G as GitHub
     participant A as RAG API
-    participant Q as Qdrant
+    participant P as Postgres
 
     H->>J: Create Job (helm install/upgrade)
     J->>G: git clone --depth 1
     J->>J: Scan and read files
     loop Batches
         J->>A: POST /ingest (in-cluster HTTP)
-        A->>Q: upsert vectors
+        A->>P: upsert chunks & vectors
     end
     J-->>H: Job complete
 ```
@@ -48,7 +48,7 @@ helm upgrade --install rag ./chart -n rag --create-namespace \
 | `indexer.repoUrl` | `""` | Git repository URL to index |
 | `indexer.repoId` | `""` | Stable identifier for the repo |
 | `indexer.branch` | `""` | Branch to clone |
-| `indexer.collection` | `docs` | Target Qdrant collection |
+| `indexer.collection` | `docs` | Target collection name |
 | `indexer.token` | `""` | API auth token |
 
 ## Benefits

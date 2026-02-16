@@ -8,7 +8,7 @@ raged is a **multi-agent memory hub**: a shared retrieval-augmented generation (
 
 ### SOLID
 
-- **Single Responsibility (SRP):** Each module does exactly one thing. `chunking.ts` chunks text. `ollama.ts` embeds text. `qdrant.ts` manages vector storage. Do not mix concerns.
+- **Single Responsibility (SRP):** Each module does exactly one thing. `chunking.ts` chunks text. `ollama.ts` embeds text. `db.ts` manages Postgres storage. Do not mix concerns.
 - **Open/Closed:** Add new embedding providers or vector backends via new modules, not by modifying existing ones. Design for adapter patterns when the third use case appears.
 - **Liskov Substitution:** If you introduce an interface, every implementation must be a drop-in replacement. No special-casing.
 - **Interface Segregation:** Keep interfaces small and focused. A consumer of embeddings should not depend on chunking types.
@@ -56,7 +56,7 @@ Do not build features until they are needed. Design so that future features are 
 All code changes **must** be reviewed for performance impact. Specifically:
 
 - **No O(n²) or worse patterns.** Nested loops over collections, repeated `Array.find`/`Array.filter` inside loops, or any pattern where work scales quadratically with input size must be refactored. Use `Map`, `Set`, or index lookups to achieve O(n) or O(n log n).
-- **No N+1 queries.** Never issue one query per item in a collection. Batch reads and writes. If you're calling Qdrant, Neo4j, or any external service inside a loop, refactor to a single batch operation.
+- **No N+1 queries.** Never issue one query per item in a collection. Batch reads and writes. If you're calling an external service inside a loop, refactor to a single batch operation.
 - **Bound memory consumption.** Process large datasets with streaming or chunked iteration — never load unbounded collections into memory. Use pagination for API responses and database reads. Set explicit limits on array sizes, queue depths, and buffer lengths.
 - **Avoid unnecessary allocations in hot paths.** Don't create intermediate arrays, objects, or closures inside tight loops when the result can be computed in-place or with a single pass.
 - **Prefer `for...of` over chained array methods** when processing large collections where intermediate arrays would be wasteful.
