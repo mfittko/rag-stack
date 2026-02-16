@@ -20,14 +20,13 @@ graph TD
     API -->|vectors + chunks + entities + queue| PG[Postgres + pgvector]
     API -->|large files| SWF[SeaweedFS / S3<br/>opt-in]
 
-    WK[Enrichment Worker] -->|poll task_queue| PG
-    WK -->|update chunks + entities| PG
+    WK[Enrichment Worker] -->|/internal/* HTTP| API
     WK -->|extract| OL
 
     style API fill:#e1f5fe
     style PG fill:#f3e5f5
     style OL fill:#e8f5e9
-    style MINIO fill:#fff9c4
+    style SWF fill:#fff9c4
     style WK fill:#e0f2f1
 ```
 
@@ -302,6 +301,24 @@ Worker behavior: if this returns zero rows, sleep 1 s before retrying to avoid b
 - Deleting a document must first delete its blob object (if present), then delete the `documents` row.
 - A periodic orphan cleanup job can remove MinIO objects with no matching `documents.raw_key`. Frequency and mechanism are implementation details — a daily cron or CLI subcommand is sufficient.
 
+### Worker → API internal endpoints
+
+The API is the **sole writer** to Postgres. The worker communicates with the database exclusively through internal HTTP endpoints on the API. This eliminates dual-write complexity, keeps schema migration ownership in one place, and removes `asyncpg`/`pgvector` from the worker's dependency tree.
+
+All internal endpoints require `RAG_API_TOKEN` auth (same as public endpoints).
+
+| Endpoint | Method | Purpose |
+|----------|--------|---------|
+| `/internal/tasks/claim` | POST | Dequeue next task (API runs SKIP LOCKED internally). Returns task payload + chunk texts in one response. |
+| `/internal/tasks/:id/result` | POST | Submit full enrichment result: tier2, tier3, entities, relationships, summary. API writes everything in a single transaction. |
+| `/internal/tasks/:id/fail` | POST | Report task failure with error message. API handles retry/dead-letter logic. |
+| `/internal/tasks/recover-stale` | POST | Reclaim tasks with expired leases (watchdog). Called periodically by worker or a cron sidecar. |
+
+**Key design choices:**
+- `/claim` returns chunk texts alongside the task payload — avoids a second round-trip for `get_chunks_text`.
+- `/result` accepts the full enrichment output as one payload — the API writes tier2, tier3, entities, relationships, document summary, and marks the task complete in a single transaction. This is more efficient and atomic than the current 10+ separate DB calls.
+- The worker becomes a stateless HTTP client: it needs only `API_URL`, `API_TOKEN`, and `OLLAMA_URL`.
+
 ---
 
 ## Migration impact
@@ -318,21 +335,22 @@ Worker behavior: if this returns zero rows, sleep 1 s before retrying to avoid b
 - `api/migrations/001_initial.sql` — Schema
 
 **API — Modify:**
-- `api/src/server.ts` — Import db instead of qdrant/redis/graph-client
+- `api/src/server.ts` — Import db instead of qdrant/redis/graph-client; register `/internal/*` routes
 - `api/src/services/ingest.ts` — Document + chunks in transaction
 - `api/src/services/query.ts` — Vector search via pgvector operator
-- `api/src/services/enrichment.ts` — Status from chunks table, queue from task_queue, and `GET /enrichment/:baseId` via `documents.base_id`
+- `api/src/services/enrichment.ts` — Status from chunks table, queue from task_queue, `GET /enrichment/:baseId` via `documents.base_id`, and `/internal/tasks/*` endpoints for worker communication
 
 **Worker — Delete:**
 - `worker/src/graph.py` + test — Neo4j client
+- `worker/src/db.py` + test — Direct Postgres client (replaced by HTTP calls to API)
 
 **Worker — Create:**
-- `worker/src/db.py` + test — Postgres pool (asyncpg)
+- `worker/src/api_client.py` + test — HTTP client for `/internal/*` endpoints
 
 **Worker — Modify:**
-- `worker/src/main.py` — SKIP LOCKED polling loop replaces Redis BRPOP
-- `worker/src/pipeline.py` — SQL updates replace qdrant/graph calls
-- `worker/src/config.py` — DATABASE_URL replaces QDRANT_URL/REDIS_URL/NEO4J_*
+- `worker/src/main.py` — HTTP polling loop (`POST /internal/tasks/claim`) replaces Redis BRPOP
+- `worker/src/pipeline.py` — HTTP calls replace direct DB writes
+- `worker/src/config.py` — `API_URL` + `API_TOKEN` replace `DATABASE_URL`
 
 **CLI — Modify:**
 - `cli/src/lib/utils.ts` — Remove qdrantFilter()
@@ -349,7 +367,7 @@ Worker behavior: if this returns zero rows, sleep 1 s before retrying to avoid b
 | Component | Remove | Add |
 |-----------|--------|-----|
 | API (npm) | `@qdrant/js-client-rest`, `redis`, `neo4j-driver` | `pg` (vector ops via SQL against pgvector extension) |
-| Worker (pip) | `qdrant-client`, `redis`, `neo4j` | `asyncpg`, `pgvector` (PyPI package) |
+| Worker (pip) | `qdrant-client`, `redis`, `neo4j`, `asyncpg`, `pgvector` | `httpx` (async HTTP client) |
 
 ### Affected GitHub issues
 
@@ -357,6 +375,7 @@ Worker behavior: if this returns zero rows, sleep 1 s before retrying to avoid b
 |-------|--------|
 | #35 Config & ops | Env vars change — DATABASE_URL replaces 6+ vars |
 | #34 Worker quality | Worker storage layer rewritten — quality work should follow migration |
+| #56 Worker DB gateway | Worker uses API `/internal/*` endpoints; direct DB client (`worker/src/db.py`) is deleted |
 | #45 Chat Phase A | Should build on Postgres, not Qdrant |
 | #42 Extension Phase 3 | `POST /items` becomes `SELECT * FROM documents` |
 | #44 Extension Phase 5 | Reads tier2/tier3 from chunks table |
@@ -392,7 +411,7 @@ Postgres consolidation (this)
 | Blob storage | SeaweedFS opt-in | S3-compatible, actively maintained (GitHub), large files only |
 | Documents table | New first-class concept | Enables browse, raw file tracking, document metadata |
 | DB client (API) | `pg` + SQL | Lightweight, no ORM; vector operations use Postgres `pgvector` extension |
-| DB client (Worker) | `asyncpg` + `pgvector` | Async-native, works with asyncio loop |
+| Worker DB access | Via API `/internal/*` endpoints | Single DB writer, no schema/migration coupling in worker |
 | Schema migrations | SQL files in `api/migrations/` | Version-controlled, run on startup |
 | Graph always on | Remove `isGraphEnabled()` gate | Graph is just tables — no reason to gate |
 | Enrichment optional | Keep `ENRICHMENT_ENABLED` | Controls task enqueue, not table existence |
