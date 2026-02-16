@@ -301,7 +301,7 @@ Worker behavior: if this returns zero rows, sleep 1 s before retrying to avoid b
 - Deleting a document must first delete its blob object (if present), then delete the `documents` row.
 - A periodic orphan cleanup job can remove MinIO objects with no matching `documents.raw_key`. Frequency and mechanism are implementation details — a daily cron or CLI subcommand is sufficient.
 
-### Worker ↔ API internal endpoints
+### Worker → API internal endpoints
 
 The API is the **sole writer** to Postgres. The worker communicates with the database exclusively through internal HTTP endpoints on the API. This eliminates dual-write complexity, keeps schema migration ownership in one place, and removes `asyncpg`/`pgvector` from the worker's dependency tree.
 
@@ -375,6 +375,7 @@ All internal endpoints require `RAG_API_TOKEN` auth (same as public endpoints).
 |-------|--------|
 | #35 Config & ops | Env vars change — DATABASE_URL replaces 6+ vars |
 | #34 Worker quality | Worker storage layer rewritten — quality work should follow migration |
+| #56 Worker DB gateway | Worker uses API `/internal/*` endpoints; direct DB client (`worker/src/db.py`) is deleted |
 | #45 Chat Phase A | Should build on Postgres, not Qdrant |
 | #42 Extension Phase 3 | `POST /items` becomes `SELECT * FROM documents` |
 | #44 Extension Phase 5 | Reads tier2/tier3 from chunks table |
