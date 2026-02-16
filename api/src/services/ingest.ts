@@ -247,122 +247,123 @@ export async function ingest(
 
   // Upsert documents and chunks in transactions
   const pool = getPool();
-  
-  for (const procItem of processedItems) {
-    const chunkBatches: Array<{ batchStart: number; chunks: string[]; vectors: number[][] }> = [];
-    for (let batchStart = 0; batchStart < procItem.chunks.length; batchStart += EMBED_BATCH_SIZE) {
-      const batchEnd = Math.min(batchStart + EMBED_BATCH_SIZE, procItem.chunks.length);
-      const batchChunks = procItem.chunks.slice(batchStart, batchEnd);
-      const batchVectors = await embedTexts(batchChunks);
-      chunkBatches.push({ batchStart, chunks: batchChunks, vectors: batchVectors });
-    }
-
-    const client = await pool.connect();
-    try {
-      await client.query("BEGIN");
-
-      const identityKey = deriveIdentityKey(procItem.source);
-      
-      // Upsert document
-      const docResult = await client.query<{ id: string; base_id: string }>(
-        `INSERT INTO documents (
-          base_id, identity_key, source, item_url, doc_type, collection, metadata, ingested_at
-        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-        ON CONFLICT (collection, identity_key) 
-        DO UPDATE SET
-          base_id = documents.base_id,
-          item_url = EXCLUDED.item_url,
-          doc_type = EXCLUDED.doc_type,
-          metadata = EXCLUDED.metadata,
-          last_seen = now()
-        RETURNING id, base_id`,
-        [
-          procItem.baseId,
-          identityKey,
-          procItem.source,
-          procItem.itemUrl || null,
-          procItem.docType,
-          col,
-          JSON.stringify(procItem.metadata || {}),
-          now,
-        ]
-      );
-
-      const documentId = docResult.rows[0].id;
-      const persistedBaseId = docResult.rows[0].base_id;
-
-      // Upsert embedded chunks in batches
-      for (const batch of chunkBatches) {
-        const { batchStart, chunks: batchChunks, vectors: batchVectors } = batch;
-
-        // Upsert chunks
-        const chunkValues: unknown[] = [];
-        const chunkRows: string[] = [];
-        
-        // 6 parameters per row for the chunks INSERT query: document_id, chunk_index, text, embedding, enrichment_status, tier1_meta
-        const PARAMS_PER_CHUNK = 6;
-        
-        for (let i = 0; i < batchChunks.length; i++) {
-          const chunkIndex = batchStart + i;
-          const base = i * PARAMS_PER_CHUNK;
-          chunkRows.push(
-            `($${base + 1}, $${base + 2}, $${base + 3}, $${base + 4}::vector, $${base + 5}, $${base + 6})`
-          );
-          chunkValues.push(
-            documentId,
-            chunkIndex,
-            batchChunks[i],
-            formatVector(batchVectors[i]),
-            shouldEnrich ? "pending" : "none",
-            JSON.stringify(procItem.tier1Meta)
-          );
+  const client = await pool.connect();
+  try {
+    for (const procItem of processedItems) {
+      try {
+        const chunkBatches: Array<{ batchStart: number; chunks: string[]; vectors: number[][] }> = [];
+        for (let batchStart = 0; batchStart < procItem.chunks.length; batchStart += EMBED_BATCH_SIZE) {
+          const batchEnd = Math.min(batchStart + EMBED_BATCH_SIZE, procItem.chunks.length);
+          const batchChunks = procItem.chunks.slice(batchStart, batchEnd);
+          const batchVectors = await embedTexts(batchChunks);
+          chunkBatches.push({ batchStart, chunks: batchChunks, vectors: batchVectors });
         }
 
-        await client.query(
-          `INSERT INTO chunks (
-            document_id, chunk_index, text, embedding, enrichment_status, tier1_meta
-          ) VALUES ${chunkRows.join(", ")}
-          ON CONFLICT (document_id, chunk_index)
+        await client.query("BEGIN");
+
+        const identityKey = deriveIdentityKey(procItem.source);
+        
+        // Upsert document
+        const docResult = await client.query<{ id: string; base_id: string }>(
+          `INSERT INTO documents (
+            base_id, identity_key, source, item_url, doc_type, collection, metadata, ingested_at
+          ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+          ON CONFLICT (collection, identity_key) 
           DO UPDATE SET
-            text = EXCLUDED.text,
-            embedding = EXCLUDED.embedding,
-            enrichment_status = EXCLUDED.enrichment_status,
-            tier1_meta = EXCLUDED.tier1_meta`,
-          chunkValues
+            base_id = documents.base_id,
+            item_url = EXCLUDED.item_url,
+            doc_type = EXCLUDED.doc_type,
+            metadata = EXCLUDED.metadata,
+            last_seen = now()
+          RETURNING id, base_id`,
+          [
+            procItem.baseId,
+            identityKey,
+            procItem.source,
+            procItem.itemUrl || null,
+            procItem.docType,
+            col,
+            JSON.stringify(procItem.metadata || {}),
+            now,
+          ]
         );
 
-        totalUpserted += batchChunks.length;
-      }
+        const documentId = docResult.rows[0].id;
+        const persistedBaseId = docResult.rows[0].base_id;
 
-      // Build enrichment tasks if enabled
-      if (shouldEnrich) {
-        docTypeCounts[procItem.docType] = (docTypeCounts[procItem.docType] || 0) + procItem.chunks.length;
+        // Upsert embedded chunks in batches
+        for (const batch of chunkBatches) {
+          const { batchStart, chunks: batchChunks, vectors: batchVectors } = batch;
 
-        for (let chunkIndex = 0; chunkIndex < procItem.chunks.length; chunkIndex++) {
-          enrichmentTasks.push({
-            taskId: randomUUID(),
-            chunkId: `${persistedBaseId}:${chunkIndex}`,
-            collection: col,
-            docType: procItem.docType,
-            baseId: persistedBaseId,
-            chunkIndex,
-            totalChunks: procItem.chunks.length,
-            text: procItem.chunks[chunkIndex],
-            source: procItem.source,
-            tier1Meta: procItem.tier1Meta,
-            attempt: 1,
-            enqueuedAt: now,
-          });
+          // Upsert chunks
+          const chunkValues: unknown[] = [];
+          const chunkRows: string[] = [];
+          
+          // 6 parameters per row for the chunks INSERT query: document_id, chunk_index, text, embedding, enrichment_status, tier1_meta
+          const PARAMS_PER_CHUNK = 6;
+          
+          for (let i = 0; i < batchChunks.length; i++) {
+            const chunkIndex = batchStart + i;
+            const base = i * PARAMS_PER_CHUNK;
+            chunkRows.push(
+              `($${base + 1}, $${base + 2}, $${base + 3}, $${base + 4}::vector, $${base + 5}, $${base + 6})`
+            );
+            chunkValues.push(
+              documentId,
+              chunkIndex,
+              batchChunks[i],
+              formatVector(batchVectors[i]),
+              shouldEnrich ? "pending" : "none",
+              JSON.stringify(procItem.tier1Meta)
+            );
+          }
+
+          await client.query(
+            `INSERT INTO chunks (
+              document_id, chunk_index, text, embedding, enrichment_status, tier1_meta
+            ) VALUES ${chunkRows.join(", ")}
+            ON CONFLICT (document_id, chunk_index)
+            DO UPDATE SET
+              text = EXCLUDED.text,
+              embedding = EXCLUDED.embedding,
+              enrichment_status = EXCLUDED.enrichment_status,
+              tier1_meta = EXCLUDED.tier1_meta`,
+            chunkValues
+          );
+
+          totalUpserted += batchChunks.length;
         }
-      }
 
-      await client.query("COMMIT");
-    } catch (error) {
-      await client.query("ROLLBACK");
-      throw error;
-    } finally {
-      client.release();
+        // Build enrichment tasks if enabled
+        if (shouldEnrich) {
+          docTypeCounts[procItem.docType] = (docTypeCounts[procItem.docType] || 0) + procItem.chunks.length;
+
+          for (let chunkIndex = 0; chunkIndex < procItem.chunks.length; chunkIndex++) {
+            enrichmentTasks.push({
+              taskId: randomUUID(),
+              chunkId: `${persistedBaseId}:${chunkIndex}`,
+              collection: col,
+              docType: procItem.docType,
+              baseId: persistedBaseId,
+              chunkIndex,
+              totalChunks: procItem.chunks.length,
+              text: procItem.chunks[chunkIndex],
+              source: procItem.source,
+              tier1Meta: procItem.tier1Meta,
+              attempt: 1,
+              enqueuedAt: now,
+            });
+          }
+        }
+
+        await client.query("COMMIT");
+      } catch (error) {
+        await client.query("ROLLBACK");
+        throw error;
+      }
     }
+  } finally {
+    client.release();
   }
 
   // Enqueue enrichment tasks in batches
