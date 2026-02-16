@@ -206,7 +206,10 @@ async def recover_stale() -> int:
         return count
 
     except httpx.HTTPStatusError as e:
-        logger.error(f"HTTP error recovering stale tasks: {e.response.status_code} {e.response.text}")
+        logger.error(
+            f"HTTP error recovering stale tasks: "
+            f"{e.response.status_code} {e.response.text}"
+        )
         raise
     except Exception as e:
         logger.error(f"Error recovering stale tasks: {e}")

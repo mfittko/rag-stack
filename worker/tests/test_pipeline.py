@@ -102,10 +102,7 @@ async def test_process_task_multi_chunk_middle(mock_task):
     mock_task["totalChunks"] = 3
     mock_task["qdrantId"] = "repo:file.py:1"
 
-    with (
-        patch("src.pipeline.api_client") as mock_api_client,
-        patch("src.pipeline.adapter") as mock_adapter,
-    ):
+    with patch("src.pipeline.api_client") as mock_api_client:
         # Mock API client operations
         mock_api_client.submit_result = AsyncMock()
 
@@ -174,7 +171,9 @@ async def test_run_document_level_extraction():
         mock_adapter.extract_entities = AsyncMock(
             return_value={
                 "entities": [{"name": "TestEntity", "type": "class", "description": "Test"}],
-                "relationships": [{"source": "A", "target": "B", "type": "uses", "description": ""}],
+                "relationships": [
+                    {"source": "A", "target": "B", "type": "uses", "description": ""}
+                ],
             }
         )
 

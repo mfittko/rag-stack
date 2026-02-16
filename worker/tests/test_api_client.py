@@ -5,7 +5,13 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import httpx
 import pytest
 
-from src.api_client import claim_task, close_client, fail_task, get_client, recover_stale, submit_result
+from src.api_client import (
+    claim_task,
+    close_client,
+    fail_task,
+    recover_stale,
+    submit_result,
+)
 
 
 @pytest.fixture
