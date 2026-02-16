@@ -130,6 +130,9 @@ To publish a new version:
 export OPENAI_API_KEY=your_key_here
 scripts/create-release.sh v0.6.0
 
+# Or auto-increment the next stable semver tag
+scripts/create-release.sh --bump patch
+
 # Dry-run notes generation without pushing tag/release
 scripts/create-release.sh v0.6.0 --dry-run
 ```
@@ -138,6 +141,17 @@ The script will:
 - generate release title/body with OpenAI using `CHANGELOG.md`
 - create and push an annotated tag
 - create a GitHub release with the generated notes
+
+### Release Automation Gap
+
+Target direction: release automatically from `main` after merge.
+
+Current gap: we do not yet have remote-deployment smoke tests to validate the newly released image in an environment before finalizing a stable release. Until that exists, releases remain script-driven.
+
+When smoke-test infrastructure is available, automate release creation with a `main`-triggered workflow that:
+- builds and publishes candidate images
+- runs post-deploy smoke tests against a remote environment
+- creates the final stable tag and GitHub release only if smoke tests pass
 
 The publish-images workflow will automatically build and publish all three images with multi-arch support (`linux/amd64`, `linux/arm64`) and semantic tags (`0.6.0`, `0.6`, `0`, `latest`).
 

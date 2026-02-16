@@ -5,12 +5,14 @@ usage() {
   cat <<'EOF'
 Usage:
   scripts/create-release.sh <tag> [options]
+  scripts/create-release.sh --bump <major|minor|patch> [options]
 
 Description:
   Generates GitHub release notes from CHANGELOG.md using OpenAI,
   creates and pushes an annotated git tag, then creates a GitHub release.
 
 Options:
+  --bump <major|minor|patch> Auto-generate next stable semver tag (vX.Y.Z)
   --title <title>            Release title (default: <tag>)
   --target <git-ref>         Ref to tag (default: HEAD)
   --repo <owner/repo>        GitHub repository (default: current gh repo)
@@ -68,7 +70,60 @@ extract_response_content() {
   printf "%s" "$content"
 }
 
+extract_changelog_entries_for_prs() {
+  local changelog_path="$1"
+  local pr_numbers="$2"
+
+  if [[ -z "$pr_numbers" ]]; then
+    return 0
+  fi
+
+  while IFS= read -r pr; do
+    [[ -z "$pr" ]] && continue
+    grep -E "\[#${pr}\]\(" "$changelog_path" || true
+  done <<< "$pr_numbers" | awk '!seen[$0]++'
+}
+
+compute_next_tag() {
+  local bump_kind="$1"
+  local latest_stable
+  local major=0
+  local minor=0
+  local patch=0
+
+  latest_stable=$(git tag --sort=-version:refname | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' | head -n 1 || true)
+  if [[ -n "$latest_stable" ]]; then
+    if [[ "$latest_stable" =~ ^v([0-9]+)\.([0-9]+)\.([0-9]+)$ ]]; then
+      major="${BASH_REMATCH[1]}"
+      minor="${BASH_REMATCH[2]}"
+      patch="${BASH_REMATCH[3]}"
+    fi
+  fi
+
+  case "$bump_kind" in
+    major)
+      major=$((major + 1))
+      minor=0
+      patch=0
+      ;;
+    minor)
+      minor=$((minor + 1))
+      patch=0
+      ;;
+    patch)
+      patch=$((patch + 1))
+      ;;
+    *)
+      echo "Error: invalid bump kind: $bump_kind" >&2
+      exit 1
+      ;;
+  esac
+
+  printf "v%s.%s.%s" "$major" "$minor" "$patch"
+}
+
 TAG=""
+BUMP_KIND=""
 TITLE=""
 TARGET="HEAD"
 REPO=""
@@ -77,9 +132,15 @@ MODEL="gpt-5.1-codex-mini"
 DRAFT=false
 PRERELEASE=false
 DRY_RUN=false
+OPENAI_MAX_RETRIES="${OPENAI_MAX_RETRIES:-3}"
+OPENAI_BACKOFF_BASE_SECONDS="${OPENAI_BACKOFF_BASE_SECONDS:-2}"
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
+    --bump)
+      BUMP_KIND="${2:-}"
+      shift 2
+      ;;
     --title)
       TITLE="${2:-}"
       shift 2
@@ -134,8 +195,24 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 
+if [[ -n "$TAG" && -n "$BUMP_KIND" ]]; then
+  echo "Error: provide either <tag> or --bump, not both" >&2
+  usage
+  exit 1
+fi
+
+if [[ -n "$BUMP_KIND" ]]; then
+  if [[ "$BUMP_KIND" != "major" && "$BUMP_KIND" != "minor" && "$BUMP_KIND" != "patch" ]]; then
+    echo "Error: --bump must be one of: major, minor, patch" >&2
+    usage
+    exit 1
+  fi
+  TAG=$(compute_next_tag "$BUMP_KIND")
+  echo "Auto-generated tag from --bump $BUMP_KIND: $TAG" >&2
+fi
+
 if [[ -z "$TAG" ]]; then
-  echo "Error: tag is required" >&2
+  echo "Error: tag is required (or use --bump)" >&2
   usage
   exit 1
 fi
@@ -190,6 +267,19 @@ if [[ -n "$PREVIOUS_TAG" ]]; then
   COMPARE_URL="https://github.com/$REPO/compare/$PREVIOUS_TAG...$TAG"
 fi
 
+RANGE_SPEC="$TARGET"
+if [[ -n "$PREVIOUS_TAG" ]]; then
+  RANGE_SPEC="$PREVIOUS_TAG..$TARGET"
+fi
+
+COMMITS_IN_SCOPE=$(git log --no-merges --pretty=format:'- %h %s' "$RANGE_SPEC" | head -n 120 || true)
+if [[ -z "$COMMITS_IN_SCOPE" ]]; then
+  COMMITS_IN_SCOPE=$(git log --pretty=format:'- %h %s' "$TARGET" | head -n 20 || true)
+fi
+
+PR_NUMBERS_IN_SCOPE=$(git log --pretty=format:'%s%n%b' "$RANGE_SPEC" | grep -Eo '#[0-9]+' | tr -d '#' | awk '!seen[$0]++' || true)
+CHANGELOG_ENTRIES_IN_SCOPE=$(extract_changelog_entries_for_prs "$CHANGELOG_PATH" "$PR_NUMBERS_IN_SCOPE")
+
 read -r -d '' SYSTEM_PROMPT <<'EOF' || true
 You are writing GitHub release notes for a software project.
 
@@ -202,13 +292,22 @@ Return JSON only in the format:
 Rules:
 - Body must be valid Markdown.
 - Keep it concise, concrete, and release-ready.
+- Use this source-priority order (highest to lowest):
+  1) Commits in release scope
+  2) Changelog entries matching release-scope PRs
+  3) Latest changelog section (top-most/current section)
+  4) Older broad context
+- If sources conflict, keep only information from the higher-priority source.
+- Never include items that cannot be traced to sources (1) or (2).
 - Use this structure when possible:
   1) A short overview paragraph (1-2 sentences)
   2) "## Highlights" with grouped bullets from Added/Changed/Fixed
   3) "## Upgrade Notes" with operational implications (if any)
   4) "## Links" with compare URL only when provided
-- Mention only changes present in the provided changelog context.
+- Mention only changes present in the provided inputs.
+- If a commit/changelog item is outside the release scope, do not include it.
 - Prefer user-impact wording over implementation internals.
+- Avoid repeating the same change in multiple bullets.
 - Do not invent changes.
 EOF
 
@@ -218,16 +317,31 @@ Release tag: $TAG
 Requested title: $TITLE
 Previous tag: ${PREVIOUS_TAG:-none}
 Compare URL: ${COMPARE_URL:-none}
+Release scope: ${RANGE_SPEC}
 
 Latest changelog section:
 $LATEST_CHANGELOG_SECTION
 
-Changelog preview (for context):
-$CHANGELOG_PREVIEW
+Commits in release scope:
+$COMMITS_IN_SCOPE
+
+PR numbers detected in release scope:
+${PR_NUMBERS_IN_SCOPE:-none}
+
+Changelog entries matching release-scope PRs:
+${CHANGELOG_ENTRIES_IN_SCOPE:-none}
+
+Known policy facts (must not be contradicted):
+- latest image tag is updated only on version-tag pushes
+- main branch pushes publish main and sha-* development tags
+- release notes must describe only this release scope, not historical aggregate context
 
 Return release notes that are polished for GitHub Releases and easy to scan.
+Return a valid JSON object with keys "title" and "body".
 If Compare URL is not "none", include it as a markdown link under "## Links".
 If Compare URL is "none", do not include "## Links" or "## Full Changelog" sections.
+Apply source-priority exactly as specified in the system prompt.
+If "Changelog entries matching release-scope PRs" is not "none", prioritize those entries over broader changelog context.
 EOF
 
 PAYLOAD=$(jq -n \
@@ -242,25 +356,39 @@ PAYLOAD=$(jq -n \
     text: { format: { type: "json_object" } }
   }')
 
-RESPONSE=$(curl -sS -X POST "https://api.openai.com/v1/responses" \
-  -H "Content-Type: application/json" \
-  -H "Authorization: Bearer ${OPENAI_API_KEY}" \
-  -d "$PAYLOAD")
+RESPONSE=""
+CONTENT=""
+ATTEMPT=1
+while [[ "$ATTEMPT" -le "$OPENAI_MAX_RETRIES" ]]; do
+  if ! RESPONSE=$(curl -sS -X POST "https://api.openai.com/v1/responses" \
+    -H "Content-Type: application/json" \
+    -H "Authorization: Bearer ${OPENAI_API_KEY}" \
+    -d "$PAYLOAD"); then
+    echo "Attempt ${ATTEMPT}/${OPENAI_MAX_RETRIES}: failed to reach OpenAI API" >&2
+  elif [[ "$(echo "$RESPONSE" | jq -r '.error.message // empty')" != "" ]]; then
+    echo "Attempt ${ATTEMPT}/${OPENAI_MAX_RETRIES}: OpenAI API error: $(echo "$RESPONSE" | jq -r '.error.message // "unknown"')" >&2
+  else
+    CONTENT=$(extract_response_content "$RESPONSE")
+    if [[ -z "$CONTENT" || "$CONTENT" == "null" ]]; then
+      echo "Attempt ${ATTEMPT}/${OPENAI_MAX_RETRIES}: empty response content from OpenAI" >&2
+    elif ! echo "$CONTENT" | jq -e '.title and .body' >/dev/null 2>&1; then
+      echo "Attempt ${ATTEMPT}/${OPENAI_MAX_RETRIES}: OpenAI response missing title/body JSON fields" >&2
+      echo "$CONTENT" >&2
+    else
+      break
+    fi
+  fi
 
-if [[ "$(echo "$RESPONSE" | jq -r '.error.message // empty')" != "" ]]; then
-  echo "Error: OpenAI API error: $(echo "$RESPONSE" | jq -r '.error.message')" >&2
-  exit 1
-fi
+  if [[ "$ATTEMPT" -lt "$OPENAI_MAX_RETRIES" ]]; then
+    BACKOFF_SECONDS=$((OPENAI_BACKOFF_BASE_SECONDS ** ATTEMPT))
+    echo "Retrying in ${BACKOFF_SECONDS}s..." >&2
+    sleep "$BACKOFF_SECONDS"
+  fi
+  ATTEMPT=$((ATTEMPT + 1))
+done
 
-CONTENT=$(extract_response_content "$RESPONSE")
 if [[ -z "$CONTENT" || "$CONTENT" == "null" ]]; then
-  echo "Error: empty response content from OpenAI" >&2
-  exit 1
-fi
-
-if ! echo "$CONTENT" | jq -e '.title and .body' >/dev/null 2>&1; then
-  echo "Error: OpenAI response missing title/body JSON fields" >&2
-  echo "$CONTENT" >&2
+  echo "Error: failed to generate release notes after ${OPENAI_MAX_RETRIES} attempts" >&2
   exit 1
 fi
 
