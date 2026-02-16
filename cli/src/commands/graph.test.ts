@@ -50,7 +50,7 @@ describe("graph command", () => {
     globalThis.fetch = fetchMock;
   });
 
-  it("should handle Neo4j not configured error", async () => {
+  it("should handle graph not enabled error", async () => {
     globalThis.fetch = async () => {
       return new Response("Service Unavailable", { status: 503 });
     };

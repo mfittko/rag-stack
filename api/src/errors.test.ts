@@ -59,7 +59,7 @@ describe("registerErrorHandler", () => {
     const app = Fastify({ logger: false }); // Disable logging for test
     registerErrorHandler(app);
     app.get("/test", async () => {
-      const err = new Error("Qdrant unavailable");
+      const err = new Error("Database unavailable");
       err.name = "UpstreamServiceError";
       throw err;
     });
