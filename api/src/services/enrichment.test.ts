@@ -121,7 +121,7 @@ describe("enrichment service", () => {
 
   describe("enqueueEnrichment", () => {
     it("enqueues chunks for enrichment", async () => {
-      const poolQuery = vi
+      const clientQuery = vi
         .fn()
         .mockResolvedValueOnce({
           rows: [
@@ -130,7 +130,6 @@ describe("enrichment service", () => {
               document_id: "doc-1",
               base_id: "test-id",
               chunk_index: 0,
-              total_chunks: 1,
               text: "test",
               source: "test.txt",
               doc_type: "text",
@@ -138,13 +137,17 @@ describe("enrichment service", () => {
             },
           ],
         })
+        .mockResolvedValueOnce({
+          rows: [{ document_id: "doc-1", total_chunks: 1 }],
+        })
+        .mockResolvedValueOnce({ rows: [] })
         .mockResolvedValueOnce({ rows: [] });
 
       const { getPool } = await import("../db.js");
       (getPool as any).mockReturnValueOnce({
-        query: poolQuery,
+        query: vi.fn(async () => ({ rows: [] })),
         connect: vi.fn(async () => ({
-          query: vi.fn(async () => ({ rows: [] })),
+          query: clientQuery,
           release: vi.fn(),
         })),
       });
@@ -156,7 +159,7 @@ describe("enrichment service", () => {
     });
 
     it("excludes already-enriched chunks when force is false", async () => {
-      const poolQuery = vi
+      const clientQuery = vi
         .fn()
         .mockResolvedValueOnce({
           rows: [
@@ -165,7 +168,6 @@ describe("enrichment service", () => {
               document_id: "doc-1",
               base_id: "test-id",
               chunk_index: 0,
-              total_chunks: 1,
               text: "test",
               source: "test.txt",
               doc_type: "text",
@@ -173,13 +175,15 @@ describe("enrichment service", () => {
             },
           ],
         })
+        .mockResolvedValueOnce({
+          rows: [{ document_id: "doc-1", total_chunks: 1 }],
+        })
+        .mockResolvedValueOnce({ rows: [] })
         .mockResolvedValueOnce({ rows: [] });
-
-      const clientQuery = vi.fn(async () => ({ rows: [] }));
 
       const { getPool } = await import("../db.js");
       (getPool as any).mockReturnValueOnce({
-        query: poolQuery,
+        query: vi.fn(async () => ({ rows: [] })),
         connect: vi.fn(async () => ({
           query: clientQuery,
           release: vi.fn(),
@@ -190,7 +194,7 @@ describe("enrichment service", () => {
       expect(result.ok).toBe(true);
       expect(result.enqueued).toBe(1);
 
-      const [sql] = poolQuery.mock.calls[0] as [string, unknown[]];
+      const [sql] = clientQuery.mock.calls[0] as [string, unknown[]];
       expect(sql).toContain("c.enrichment_status != 'enriched'");
     });
   });

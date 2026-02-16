@@ -174,6 +174,7 @@ export async function query(
       );
 
       const expandedEntities = expandedResult.rows;
+      const expandedEntityNames = expandedEntities.map((entity) => entity.name);
 
       // Fetch relationships between expanded entities
       const relationshipsResult = await pool.query<{
@@ -188,8 +189,9 @@ export async function query(
         FROM entity_relationships er
         JOIN entities es ON er.source_id = es.id
         JOIN entities et ON er.target_id = et.id
-        WHERE es.name = ANY($1::text[]) OR et.name = ANY($1::text[])`,
-        [Array.from(entityNames)]
+        WHERE es.name = ANY($1::text[])
+          AND et.name = ANY($1::text[])`,
+        [expandedEntityNames]
       );
 
       graphData = {

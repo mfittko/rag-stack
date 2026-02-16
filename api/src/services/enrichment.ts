@@ -226,7 +226,6 @@ export async function enqueueEnrichment(
     document_id: string;
     base_id: string;
     chunk_index: number;
-    total_chunks: number;
     text: string;
     source: string;
     doc_type: string;
@@ -253,13 +252,12 @@ export async function enqueueEnrichment(
       const limitParam = queryParams.length + 1;
       queryParams.push(PAGE_SIZE);
 
-      const chunkPage: { rows: ChunkRow[] } = await pool.query<ChunkRow>(
+      const chunkPage: { rows: ChunkRow[] } = await client.query<ChunkRow>(
         `SELECT
           c.id::text || ':' || c.chunk_index AS chunk_id,
           d.id AS document_id,
           d.base_id,
           c.chunk_index,
-          COUNT(*) OVER (PARTITION BY d.base_id)::int AS total_chunks,
           c.text,
           d.source,
           c.doc_type,
@@ -276,6 +274,20 @@ export async function enqueueEnrichment(
         break;
       }
 
+      const documentIds = Array.from(new Set(chunkPage.rows.map((row) => row.document_id)));
+      const countsResult = await client.query<{ document_id: string; total_chunks: number }>(
+        `SELECT c.document_id, COUNT(*)::int AS total_chunks
+         FROM chunks c
+         JOIN documents d ON c.document_id = d.id
+         WHERE d.collection = $1
+           AND c.document_id = ANY($2::uuid[])
+         GROUP BY c.document_id`,
+        [col, documentIds]
+      );
+      const totalChunksByDocument = new Map(
+        countsResult.rows.map((row) => [row.document_id, row.total_chunks])
+      );
+
       const now = new Date().toISOString();
       for (let i = 0; i < chunkPage.rows.length; i += TASK_BATCH_SIZE) {
         const batchRows = chunkPage.rows.slice(i, i + TASK_BATCH_SIZE);
@@ -289,7 +301,7 @@ export async function enqueueEnrichment(
             docType: chunk.doc_type || "text",
             baseId: chunk.base_id,
             chunkIndex: chunk.chunk_index,
-            totalChunks: chunk.total_chunks,
+            totalChunks: totalChunksByDocument.get(chunk.document_id) ?? 1,
             text: chunk.text,
             source: chunk.source,
             tier1Meta: chunk.tier1_meta || {},

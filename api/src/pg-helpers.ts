@@ -26,7 +26,7 @@ export function translateFilter(
       // Array of conditions that must match
       const mustConds = value as Array<{ key: string; match: { value: unknown } }>;
       for (const cond of mustConds) {
-        const column = toSnakeCase(cond.key);
+        const column = toAllowedColumn(cond.key);
         conditions.push(`${tableAlias}.${column} = $${paramIndex}`);
         params.push(cond.match.value);
         paramIndex++;
@@ -35,14 +35,14 @@ export function translateFilter(
       // Array of conditions that must not match
       const mustNotConds = value as Array<{ key: string; match: { value: unknown } }>;
       for (const cond of mustNotConds) {
-        const column = toSnakeCase(cond.key);
+        const column = toAllowedColumn(cond.key);
         conditions.push(`${tableAlias}.${column} != $${paramIndex}`);
         params.push(cond.match.value);
         paramIndex++;
       }
     } else {
       // Simple key-value filter
-      const column = toSnakeCase(key);
+      const column = toAllowedColumn(key);
       conditions.push(`${tableAlias}.${column} = $${paramIndex}`);
       params.push(value);
       paramIndex++;
@@ -62,6 +62,25 @@ function toSnakeCase(str: string): string {
     .replace(/([A-Z])/g, (match, p1, offset) => {
       return offset === 0 ? p1.toLowerCase() : `_${p1.toLowerCase()}`;
     });
+}
+
+const ALLOWED_FILTER_COLUMNS = new Set([
+  "chunk_index",
+  "doc_type",
+  "repo_id",
+  "repo_url",
+  "path",
+  "lang",
+  "item_url",
+  "enrichment_status",
+]);
+
+function toAllowedColumn(key: string): string {
+  const column = toSnakeCase(key);
+  if (!/^[a-z_][a-z0-9_]*$/.test(column) || !ALLOWED_FILTER_COLUMNS.has(column)) {
+    throw new Error(`Unsupported filter key: ${key}`);
+  }
+  return column;
 }
 
 /**

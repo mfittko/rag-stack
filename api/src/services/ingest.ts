@@ -249,6 +249,14 @@ export async function ingest(
   const pool = getPool();
   
   for (const procItem of processedItems) {
+    const chunkBatches: Array<{ batchStart: number; chunks: string[]; vectors: number[][] }> = [];
+    for (let batchStart = 0; batchStart < procItem.chunks.length; batchStart += EMBED_BATCH_SIZE) {
+      const batchEnd = Math.min(batchStart + EMBED_BATCH_SIZE, procItem.chunks.length);
+      const batchChunks = procItem.chunks.slice(batchStart, batchEnd);
+      const batchVectors = await embedTexts(batchChunks);
+      chunkBatches.push({ batchStart, chunks: batchChunks, vectors: batchVectors });
+    }
+
     const client = await pool.connect();
     try {
       await client.query("BEGIN");
@@ -283,11 +291,9 @@ export async function ingest(
       const documentId = docResult.rows[0].id;
       const persistedBaseId = docResult.rows[0].base_id;
 
-      // Embed chunks in batches
-      for (let batchStart = 0; batchStart < procItem.chunks.length; batchStart += EMBED_BATCH_SIZE) {
-        const batchEnd = Math.min(batchStart + EMBED_BATCH_SIZE, procItem.chunks.length);
-        const batchChunks = procItem.chunks.slice(batchStart, batchEnd);
-        const batchVectors = await embedTexts(batchChunks);
+      // Upsert embedded chunks in batches
+      for (const batch of chunkBatches) {
+        const { batchStart, chunks: batchChunks, vectors: batchVectors } = batch;
 
         // Upsert chunks
         const chunkValues: unknown[] = [];
@@ -300,7 +306,7 @@ export async function ingest(
           const chunkIndex = batchStart + i;
           const base = i * PARAMS_PER_CHUNK;
           chunkRows.push(
-            `($${base + 1}, $${base + 2}, $${base + 3}, $${base + 4}, $${base + 5}, $${base + 6})`
+            `($${base + 1}, $${base + 2}, $${base + 3}, $${base + 4}::vector, $${base + 5}, $${base + 6})`
           );
           chunkValues.push(
             documentId,

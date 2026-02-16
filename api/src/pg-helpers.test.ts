@@ -104,5 +104,13 @@ describe("pg-helpers", () => {
       expect(result.sql).toBe(" AND c.chunk_index = $1");
       expect(result.sql).not.toContain("_chunk_index");
     });
+
+    it("rejects unsupported filter columns", () => {
+      expect(() => translateFilter({ source: "doc" })).toThrow("Unsupported filter key");
+    });
+
+    it("rejects malicious filter keys", () => {
+      expect(() => translateFilter({ "id; DROP TABLE chunks--": "x" })).toThrow("Unsupported filter key");
+    });
   });
 });
