@@ -10,15 +10,18 @@ The format is based on [Common Changelog](https://common-changelog.org/).
 
 
 
+
 ## February 16, 2026
 
 ### Added
 
+- **GHCR image publishing** ([#79](https://github.com/mfittko/RAGed/pull/79)): CI workflow now builds and pushes multi-arch `ghcr.io/mfittko/{raged-api,raged,raged-worker}` images on main and `v*.*.*` tags, producing deterministic `main`, `sha-*`, semantic version, and release-only `latest` tags.
 - **Service Healthchecks** ([#70](https://github.com/mfittko/raged/pull/70)): Docker Compose now performs healthchecks for qdrant and ollama and gates service startup on healthy status to ensure dependent services are ready before the API begins operations.
 - **Postgres Database Layer** ([#63](https://github.com/mfittko/raged/pull/63)): Added the `db` module with a Postgres pool, query helper, migration runner, unit tests, and the initial schema migration so the API boots its tables on startup and enqueues enrichment work via Postgres.
 
 ### Changed
 
+- **GHCR defaults & docs** ([#79](https://github.com/mfittko/RAGed/pull/79)): Helm values, deployment docs, and the contributing guide now reference the official GHCR repositories/tags and describe the new publish triggers and `latest` policy.
 - **Drop legacy storage layers** ([#78](https://github.com/mfittko/RAGed/pull/78)): Removed Qdrant, Neo4j, and Redis compatibility scaffolding so the API/worker stack now depends solely on Postgres (with pgvector) and Ollama, and updated runtime config, tests, CLI messaging, and docs to reflect the Postgres-only architecture.
 - **Verify worker API readiness** ([#76](https://github.com/mfittko/RAGed/pull/76)): Worker deployment now probes the API `/healthz` endpoint over HTTP, ensuring the worker only becomes ready once the API it depends on is healthy.
 - **Plain filter objects** ([#75](https://github.com/mfittko/RAGed/pull/75)): Query commands now build simple key-value filters and send them directly so the Postgres backend can translate them to SQL, eliminating the previous Qdrant-specific payload and helper.
