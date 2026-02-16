@@ -46,6 +46,7 @@ describe("query command", () => {
       const body = JSON.parse(init?.body as string);
       expect(body.filter).toBeDefined();
       expect(body.filter.repoId).toBe("my-repo");
+      expect(body.filter.path).toBe("src/");
       expect(body.filter.lang).toBe("ts");
       
       return new Response(JSON.stringify(mockResults), {
@@ -57,6 +58,7 @@ describe("query command", () => {
     await cmdQuery({
       q: "test",
       repoId: "my-repo",
+      pathPrefix: "src/",
       lang: "ts",
     });
 

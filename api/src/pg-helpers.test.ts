@@ -64,6 +64,13 @@ describe("pg-helpers", () => {
       expect(result.params).toEqual(["code"]);
     });
 
+    it("translates path filter as prefix match", () => {
+      const filter = { path: "src/" };
+      const result = translateFilter(filter, 3);
+      expect(result.sql).toBe(" AND c.path LIKE $4 || '%'" );
+      expect(result.params).toEqual(["src/"]);
+    });
+
     it("translates must conditions", () => {
       const filter = {
         must: [
@@ -75,6 +82,15 @@ describe("pg-helpers", () => {
       expect(result.sql).toContain("c.doc_type = $4");
       expect(result.sql).toContain("c.lang = $5");
       expect(result.params).toEqual(["code", "typescript"]);
+    });
+
+    it("translates legacy path text match as prefix match", () => {
+      const filter = {
+        must: [{ key: "path", match: { text: "src/" } }],
+      };
+      const result = translateFilter(filter, 3);
+      expect(result.sql).toBe(" AND c.path LIKE $4 || '%'" );
+      expect(result.params).toEqual(["src/"]);
     });
 
     it("translates must_not conditions", () => {
