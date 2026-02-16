@@ -1,0 +1,69 @@
+name: Deploy Docs to Pages
+
+on:
+  push:
+    branches: ["main"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: "pages"
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Pages
+        uses: actions/configure-pages@v5
+
+      - name: Prepare public docs directory
+        run: |
+          rm -rf ./docs_public
+          rsync -av --delete ./docs/ ./docs_public/ \
+            --exclude 'plans/**' \
+            --exclude 'AGENTS.md'
+
+      - name: Add front matter for Jekyll rendering
+        run: |
+          while IFS= read -r file; do
+            first_line="$(head -n 1 "$file" || true)"
+            if [ "$first_line" != '---' ]; then
+              tmp_file="${file}.tmp"
+              {
+                printf -- '---\n---\n\n'
+                cat "$file"
+              } > "$tmp_file"
+              mv "$tmp_file" "$file"
+            fi
+          done < <(find ./docs_public -type f -name '*.md')
+
+      - name: "Build with Jekyll (source: docs_public -> public)"
+        uses: actions/jekyll-build-pages@v1
+        with:
+          source: ./docs_public
+          destination: ./public
+
+      - name: Upload artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: ./public
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
