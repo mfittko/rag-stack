@@ -8,6 +8,7 @@ The format is based on [Common Changelog](https://common-changelog.org/).
 
 
 
+
 ## February 16, 2026
 
 ### Added
@@ -17,6 +18,7 @@ The format is based on [Common Changelog](https://common-changelog.org/).
 
 ### Changed
 
+- **Verify worker API readiness** ([#76](https://github.com/mfittko/RAGed/pull/76)): Worker deployment now probes the API `/healthz` endpoint over HTTP, ensuring the worker only becomes ready once the API it depends on is healthy.
 - **Worker HTTP storage migration** ([#74](https://github.com/mfittko/RAGed/pull/74)): Worker now polls and reports tasks through new internal API HTTP endpoints instead of direct Postgres access, including a dedicated async HTTP client, updated pipeline, and API-based config, cutting asyncpg/pgvector usage and resulting in a leaner worker codebase.
 - **Startup Config Guard** ([#70](https://github.com/mfittko/raged/pull/70)): API startup now validates DATABASE_URL, OLLAMA_URL, and QDRANT_URL (with tests) before calling listen(), preventing confusing downstream failures when essential config is missing.
 - **Token Hardening Warning** ([#70](https://github.com/mfittko/raged/pull/70)): The auth module now warns when RAGED_API_TOKEN is shorter than 16 characters, highlighting weak secrets during startup and covering the behavior with tests.

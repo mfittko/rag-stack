@@ -63,15 +63,23 @@ spec:
             initialDelaySeconds: 30
             timeoutSeconds: 5
             periodSeconds: 30
-          # Readiness: process-level readiness only (avoid external dependency coupling)
+          # Readiness: check API availability (worker depends on API for task queue)
           readinessProbe:
             exec:
               command:
                 - python
                 - -c
                 - |
+                  import os
                   import sys
-                  sys.exit(0)
+                  import urllib.request
+                  import urllib.parse
+                  try:
+                      url = urllib.parse.urljoin(os.environ['API_URL'], '/healthz')
+                      response = urllib.request.urlopen(url, timeout=5)
+                      sys.exit(0 if 200 <= response.status < 300 else 1)
+                  except Exception:
+                      sys.exit(1)
             initialDelaySeconds: 10
             timeoutSeconds: 5
             periodSeconds: 10
