@@ -12,11 +12,6 @@ api:
       cpu: 500m
       memory: 512Mi
   env:
-    # Legacy env vars for backward compatibility (API not yet migrated to Postgres)
-    # These will be removed once API migration is complete
-    QDRANT_COLLECTION: "docs"
-    VECTOR_SIZE: "768"
-    DISTANCE: "Cosine"
     EMBED_MODEL: "nomic-embed-text"
     CORS_ORIGIN: ""
     RATE_LIMIT_MAX: "100"

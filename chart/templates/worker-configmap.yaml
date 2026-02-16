@@ -6,14 +6,7 @@ metadata:
   labels:
     {{- include "rag.labels" . | nindent 4 }}
 data:
-  {{- if .Values.migration.allowBrokenLegacyRuntime }}
-  # Legacy env vars for temporary migration mode (explicit opt-in only).
-  # These localhost endpoints are intentionally temporary and not production-safe.
-  REDIS_URL: "redis://localhost:6379"
-  QDRANT_URL: "http://localhost:6333"
-  NEO4J_URL: "bolt://localhost:7687"
-  NEO4J_USER: "neo4j"
-  {{- end }}
+  API_URL: "http://{{ .Release.Name }}-api:{{ .Values.api.service.port }}"
   OLLAMA_URL: "http://{{ .Release.Name }}-ollama:{{ .Values.ollama.service.port }}"
   EXTRACTOR_PROVIDER: "{{ .Values.enrichment.worker.extractor.provider }}"
   EXTRACTOR_MODEL_FAST: "{{ .Values.enrichment.worker.extractor.modelFast }}"

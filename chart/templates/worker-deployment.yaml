@@ -33,33 +33,11 @@ spec:
             - secretRef: { name: {{ .Release.Name }}-worker-secret }
             {{- end }}
           env:
-            - name: DATABASE_URL
+            - name: API_TOKEN
               valueFrom:
                 secretKeyRef:
-                  name: {{ .Release.Name }}-postgres-secret
-                  key: DATABASE_URL
-            {{- if .Values.seaweedfs.enabled }}
-            - name: BLOB_STORE_URL
-              valueFrom:
-                secretKeyRef:
-                  name: {{ .Release.Name }}-seaweedfs-secret
-                  key: BLOB_STORE_URL
-            - name: BLOB_STORE_ACCESS_KEY
-              valueFrom:
-                secretKeyRef:
-                  name: {{ .Release.Name }}-seaweedfs-secret
-                  key: BLOB_STORE_ACCESS_KEY
-            - name: BLOB_STORE_SECRET_KEY
-              valueFrom:
-                secretKeyRef:
-                  name: {{ .Release.Name }}-seaweedfs-secret
-                  key: BLOB_STORE_SECRET_KEY
-            - name: BLOB_STORE_BUCKET
-              valueFrom:
-                secretKeyRef:
-                  name: {{ .Release.Name }}-seaweedfs-secret
-                  key: BLOB_STORE_BUCKET
-            {{- end }}
+                  name: {{ .Release.Name }}-api-secret
+                  key: API_AUTH_TOKEN
           volumeMounts:
             - name: tmp
               mountPath: /tmp
@@ -83,46 +61,14 @@ spec:
             initialDelaySeconds: 30
             timeoutSeconds: 5
             periodSeconds: 30
-          # Readiness: external dependency health (Postgres)
+          # Readiness: check API /healthz endpoint (worker communicates via API)
           readinessProbe:
-            exec:
-              command:
-                - python
-                - -c
-                - |
-                  import os
-                  import socket
-                  import sys
-                  from urllib.parse import urlparse
-
-                  def check_tcp(host, port, timeout=2):
-                      if not host or not port:
-                          # Fail fast if configuration is missing or incomplete (pod not ready)
-                          return False
-                      try:
-                          port = int(port)
-                          with socket.create_connection((host, port), timeout=timeout):
-                              return True
-                      except Exception:
-                          return False
-
-                  def host_port_from_url(url, default_host, default_port):
-                      if not url:
-                          return default_host, default_port
-                      parsed = urlparse(url)
-                      host = parsed.hostname or default_host
-                      port = parsed.port or default_port
-                      return host, str(port)
-
-                  # Check Postgres connection (required for worker to function)
-                  db_host, db_port = host_port_from_url(
-                      os.getenv("DATABASE_URL"),
-                      "{{ .Release.Name }}-postgres",
-                      5432,
-                  )
-
-                  ready = check_tcp(db_host, db_port)
-                  sys.exit(0 if ready else 1)
+            httpGet:
+              path: /healthz
+              port: {{ .Values.api.service.port }}
+              httpHeaders:
+                - name: Host
+                  value: {{ .Release.Name }}-api
             initialDelaySeconds: 10
             timeoutSeconds: 5
             periodSeconds: 10
