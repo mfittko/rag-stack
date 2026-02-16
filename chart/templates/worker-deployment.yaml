@@ -67,10 +67,18 @@ spec:
           readinessProbe:
             exec:
               command:
-                - sh
+                - python
                 - -c
                 - |
-                  wget -q -O- --timeout=3 ${API_URL}/healthz | grep -q '"ok":true'
+                  import os
+                  import sys
+                  import urllib.request
+                  try:
+                      url = os.environ.get('API_URL', 'http://localhost:8080') + '/healthz'
+                      response = urllib.request.urlopen(url, timeout=3)
+                      sys.exit(0 if response.status == 200 else 1)
+                  except Exception:
+                      sys.exit(1)
             initialDelaySeconds: 10
             timeoutSeconds: 5
             periodSeconds: 10
