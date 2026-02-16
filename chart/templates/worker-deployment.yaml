@@ -76,7 +76,7 @@ spec:
                   try:
                       url = os.environ.get('API_URL', 'http://localhost:8080') + '/healthz'
                       response = urllib.request.urlopen(url, timeout=3)
-                      sys.exit(0 if response.status == 200 else 1)
+                      sys.exit(0 if 200 <= response.status < 300 else 1)
                   except Exception:
                       sys.exit(1)
             initialDelaySeconds: 10
