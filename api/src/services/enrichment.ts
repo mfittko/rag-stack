@@ -299,6 +299,9 @@ export async function enqueueEnrichment(
         values
       );
     }
+  } catch (error) {
+    // Re-throw the error after ensuring proper cleanup in finally
+    throw error;
   } finally {
     client.release();
   }

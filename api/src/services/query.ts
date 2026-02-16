@@ -53,15 +53,13 @@ export async function query(
   }
   const topK = request.topK ?? 8;
 
-  // Translate filter to Postgres WHERE clause (offset by 3 for the base params)
+  // Translate filter to Postgres WHERE clause (offset by 4 for the base params: $1=collection, $2=vector, $3=topK)
   const { sql: filterSql, params: filterParams } = translateFilter(request.filter, 3);
 
   // Build query with pgvector cosine distance
   const pool = getPool();
-  const vectorLiteral = formatVector(vector);
   
-  // Note: We embed the vector literal directly in SQL as pgvector doesn't support
-  // passing vectors as parameters in all driver versions
+  // Use parameterized query for the vector to prevent SQL injection
   const result = await pool.query<{
     chunk_id: string;
     distance: number;
@@ -80,8 +78,8 @@ export async function query(
     tier3_meta: Record<string, unknown> | null;
   }>(
     `SELECT 
-      c.id::text || ':' || c.chunk_index AS chunk_id,
-      c.embedding <=> '${vectorLiteral}'::vector AS distance,
+      c.id::text || ':' || c.chunk_index::text AS chunk_id,
+      c.embedding <=> $2::vector AS distance,
       c.text,
       d.source,
       c.chunk_index,
@@ -98,9 +96,9 @@ export async function query(
     FROM chunks c
     JOIN documents d ON c.document_id = d.id
     WHERE d.collection = $1${filterSql}
-    ORDER BY c.embedding <=> '${vectorLiteral}'::vector
-    LIMIT $2`,
-    [col, topK, ...filterParams]
+    ORDER BY c.embedding <=> $2::vector
+    LIMIT $3`,
+    [col, JSON.stringify(vector), topK, ...filterParams]
   );
 
   const results: QueryResultItem[] = result.rows.map((row) => ({

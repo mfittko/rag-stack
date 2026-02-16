@@ -70,21 +70,6 @@ function toSourceFromUrl(rawUrl: string): string {
   }
 }
 
-export interface IngestResult {
-  ok: true;
-  upserted: number;
-  fetched?: number;
-  enrichment?: {
-    enqueued: number;
-    docTypes: Record<string, number>;
-  };
-  errors?: Array<{
-    url: string;
-    status: number | null;
-    reason: string;
-  }>;
-}
-
 /**
  * Ingest documents and chunks into Postgres
  * All writes happen in a transaction for consistency
@@ -382,6 +367,9 @@ export async function ingest(
         const batch = enrichmentTasks.slice(i, i + TASK_BATCH_SIZE);
         await enqueueEnrichmentBatch(batch, client);
       }
+    } catch (error) {
+      // Re-throw the error after ensuring proper cleanup in finally
+      throw error;
     } finally {
       client.release();
     }

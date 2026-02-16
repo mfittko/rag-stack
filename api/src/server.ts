@@ -141,6 +141,7 @@ export function buildApp() {
        JOIN entities es ON er.source_id = es.id
        JOIN entities et ON er.target_id = et.id
        WHERE es.name = $1 OR et.name = $1
+       ORDER BY er.created_at DESC
        LIMIT 100`,
       [name]
     );

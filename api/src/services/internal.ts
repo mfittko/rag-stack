@@ -142,6 +142,10 @@ export async function submitTaskResult(taskId: string, result: TaskResultRequest
     }
     const baseId = chunkIdParts[0];
     const chunkIndex = parseInt(chunkIdParts[1], 10);
+    
+    if (isNaN(chunkIndex) || chunkIndex < 0) {
+      throw new Error(`Invalid chunk index in chunkId: ${result.chunkId}`);
+    }
 
     // Update chunk with enrichment results
     await client.query(
@@ -176,48 +180,81 @@ export async function submitTaskResult(taskId: string, result: TaskResultRequest
 
     const documentId = docResult.rows[0].id;
 
-    // Upsert entities
+    // Batch upsert entities
     if (result.entities && result.entities.length > 0) {
-      for (const entity of result.entities) {
-        await client.query(
-          `INSERT INTO entities (name, type, description)
-           VALUES ($1, $2, $3)
-           ON CONFLICT (name) DO UPDATE
-           SET type = COALESCE(EXCLUDED.type, entities.type),
-               description = COALESCE(EXCLUDED.description, entities.description),
-               mention_count = entities.mention_count + 1,
-               last_seen = now()`,
-          [entity.name, entity.type, entity.description || null]
-        );
+      const entityValues: string[] = [];
+      const entityParams: unknown[] = [];
+      let paramIndex = 1;
 
-        // Create document-entity mention
-        await client.query(
-          `INSERT INTO document_entity_mentions (document_id, entity_id, mention_count)
-           SELECT $1, id, 1
-           FROM entities
-           WHERE name = $2
-           ON CONFLICT (document_id, entity_id) DO UPDATE
-           SET mention_count = document_entity_mentions.mention_count + 1`,
-          [documentId, entity.name]
+      for (const entity of result.entities) {
+        entityValues.push(
+          `($${paramIndex}, $${paramIndex + 1}, $${paramIndex + 2})`
         );
+        entityParams.push(entity.name, entity.type, entity.description || null);
+        paramIndex += 3;
       }
+
+      await client.query(
+        `INSERT INTO entities (name, type, description)
+         VALUES ${entityValues.join(", ")}
+         ON CONFLICT (name) DO UPDATE
+         SET type = COALESCE(EXCLUDED.type, entities.type),
+             description = COALESCE(EXCLUDED.description, entities.description),
+             mention_count = entities.mention_count + 1,
+             last_seen = now()`,
+        entityParams
+      );
+
+      // Batch create document-entity mentions
+      const mentionValues: string[] = [];
+      const mentionParams: unknown[] = [documentId];
+      paramIndex = 2; // $1 is documentId
+
+      for (const entity of result.entities) {
+        mentionValues.push(`($${paramIndex})`);
+        mentionParams.push(entity.name);
+        paramIndex++;
+      }
+
+      await client.query(
+        `INSERT INTO document_entity_mentions (document_id, entity_id, mention_count)
+         SELECT $1, e.id, 1
+         FROM (VALUES ${mentionValues.join(", ")}) AS names(name)
+         JOIN entities e ON e.name = names.name
+         ON CONFLICT (document_id, entity_id) DO UPDATE
+         SET mention_count = document_entity_mentions.mention_count + 1`,
+        mentionParams
+      );
     }
 
-    // Upsert relationships
+    // Batch upsert relationships
     if (result.relationships && result.relationships.length > 0) {
+      const relValues: string[] = [];
+      const relParams: unknown[] = [];
+      let paramIndex = 1;
+
       for (const rel of result.relationships) {
-        await client.query(
-          `INSERT INTO entity_relationships (source_id, target_id, relationship_type, description)
-           SELECT 
-             (SELECT id FROM entities WHERE name = $1),
-             (SELECT id FROM entities WHERE name = $2),
-             $3,
-             $4
-           ON CONFLICT (source_id, target_id, relationship_type) DO UPDATE
-           SET description = COALESCE(EXCLUDED.description, entity_relationships.description)`,
-          [rel.source, rel.target, rel.type, rel.description || null]
+        relValues.push(
+          `($${paramIndex}, $${paramIndex + 1}, $${paramIndex + 2}, $${paramIndex + 3})`
         );
+        relParams.push(rel.source, rel.target, rel.type, rel.description || null);
+        paramIndex += 4;
       }
+
+      await client.query(
+        `INSERT INTO entity_relationships (source_id, target_id, relationship_type, description)
+         SELECT 
+           source_entity.id,
+           target_entity.id,
+           rels.relationship_type,
+           rels.description
+         FROM (VALUES ${relValues.join(", ")}) AS rels(source_name, target_name, relationship_type, description)
+         JOIN entities AS source_entity ON source_entity.name = rels.source_name
+         JOIN entities AS target_entity ON target_entity.name = rels.target_name
+         ON CONFLICT (source_id, target_id, relationship_type) DO UPDATE
+         SET description = COALESCE(EXCLUDED.description, entity_relationships.description)`,
+        relParams
+      );
     }
 
     // Update document summary if provided

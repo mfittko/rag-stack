@@ -5,10 +5,12 @@
  * Supports basic filters for now - can be extended as needed
  * @param filter - The filter object
  * @param paramIndexOffset - Starting parameter index (default: 0)
+ * @param tableAlias - Table alias prefix for columns (default: "c")
  */
 export function translateFilter(
   filter?: Record<string, unknown>,
-  paramIndexOffset = 0
+  paramIndexOffset = 0,
+  tableAlias = "c"
 ): { sql: string; params: unknown[] } {
   if (!filter) {
     return { sql: "", params: [] };
@@ -25,7 +27,7 @@ export function translateFilter(
       const mustConds = value as Array<{ key: string; match: { value: unknown } }>;
       for (const cond of mustConds) {
         const column = toSnakeCase(cond.key);
-        conditions.push(`${column} = $${paramIndex}`);
+        conditions.push(`${tableAlias}.${column} = $${paramIndex}`);
         params.push(cond.match.value);
         paramIndex++;
       }
@@ -34,14 +36,14 @@ export function translateFilter(
       const mustNotConds = value as Array<{ key: string; match: { value: unknown } }>;
       for (const cond of mustNotConds) {
         const column = toSnakeCase(cond.key);
-        conditions.push(`${column} != $${paramIndex}`);
+        conditions.push(`${tableAlias}.${column} != $${paramIndex}`);
         params.push(cond.match.value);
         paramIndex++;
       }
     } else {
       // Simple key-value filter
       const column = toSnakeCase(key);
-      conditions.push(`${column} = $${paramIndex}`);
+      conditions.push(`${tableAlias}.${column} = $${paramIndex}`);
       params.push(value);
       paramIndex++;
     }
