@@ -24,6 +24,37 @@ export interface RawUploadResult {
   mimeType: string;
 }
 
+// Cached S3 client to avoid per-upload instantiation overhead
+let cachedS3Client: S3Client | null = null;
+let cachedConfigHash: string | null = null;
+
+function getConfigHash(config: BlobStoreConfig): string {
+  return `${config.endpoint}:${config.accessKeyId}:${config.bucket}:${config.region}`;
+}
+
+function getS3Client(config: BlobStoreConfig): S3Client {
+  const configHash = getConfigHash(config);
+  
+  // Reuse existing client if config hasn't changed
+  if (cachedS3Client && cachedConfigHash === configHash) {
+    return cachedS3Client;
+  }
+  
+  // Create new client and cache it
+  cachedS3Client = new S3Client({
+    endpoint: config.endpoint,
+    region: config.region,
+    forcePathStyle: true,
+    credentials: {
+      accessKeyId: config.accessKeyId,
+      secretAccessKey: config.secretAccessKey,
+    },
+  });
+  cachedConfigHash = configHash;
+  
+  return cachedS3Client;
+}
+
 function asNonEmptyEnv(value: string | undefined): string | null {
   if (!value) {
     return null;
@@ -90,15 +121,8 @@ export async function uploadRawBlob(input: RawUploadInput): Promise<RawUploadRes
   const key = `documents/${input.documentId}/raw-${hash}${ext}`;
   const mimeType = input.mimeType;
 
-  const client = new S3Client({
-    endpoint: config.endpoint,
-    region: config.region,
-    forcePathStyle: true,
-    credentials: {
-      accessKeyId: config.accessKeyId,
-      secretAccessKey: config.secretAccessKey,
-    },
-  });
+  // Reuse cached S3 client instead of creating a new one per upload
+  const client = getS3Client(config);
 
   await client.send(
     new PutObjectCommand({
