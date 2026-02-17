@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { embed } from "./ollama.js";
+import { embed } from "./embeddings.js";
 
 const originalFetch = globalThis.fetch;
 

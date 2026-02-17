@@ -11,6 +11,7 @@ const PORT = Number(process.env.PORT || "8080");
  */
 export function validateConfig(): string[] {
   const errors: string[] = [];
+  const embedProvider = (process.env.EMBED_PROVIDER || "ollama").trim().toLowerCase();
 
   // DATABASE_URL is required (unless ALLOW_DEV_DB is set for local dev fallback)
   if (!process.env.DATABASE_URL && process.env.ALLOW_DEV_DB !== "true") {
@@ -19,9 +20,19 @@ export function validateConfig(): string[] {
     );
   }
 
-  // OLLAMA_URL is required for embedding generation
-  if (!process.env.OLLAMA_URL) {
-    errors.push("OLLAMA_URL is required for embedding generation (e.g., http://localhost:11434)");
+  if (embedProvider !== "ollama" && embedProvider !== "openai") {
+    errors.push("EMBED_PROVIDER must be either 'ollama' or 'openai'");
+  }
+
+  if (embedProvider === "openai") {
+    if (!process.env.OPENAI_API_KEY) {
+      errors.push("OPENAI_API_KEY is required when EMBED_PROVIDER=openai");
+    }
+  } else {
+    // OLLAMA_URL is required for ollama embedding generation
+    if (!process.env.OLLAMA_URL) {
+      errors.push("OLLAMA_URL is required for embedding generation (e.g., http://localhost:11434)");
+    }
   }
 
   return errors;

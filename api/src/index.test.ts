@@ -6,6 +6,8 @@ describe("validateConfig", () => {
     DATABASE_URL: process.env.DATABASE_URL,
     OLLAMA_URL: process.env.OLLAMA_URL,
     ALLOW_DEV_DB: process.env.ALLOW_DEV_DB,
+    EMBED_PROVIDER: process.env.EMBED_PROVIDER,
+    OPENAI_API_KEY: process.env.OPENAI_API_KEY,
   };
 
   afterEach(() => {
@@ -40,6 +42,7 @@ describe("validateConfig", () => {
 
   it("returns error when OLLAMA_URL is missing", () => {
     process.env.DATABASE_URL = "postgresql://test:test@localhost:5432/test";
+    delete process.env.EMBED_PROVIDER;
     delete process.env.OLLAMA_URL;
 
     const errors = validateConfig();
@@ -47,8 +50,38 @@ describe("validateConfig", () => {
     expect(errors.some(e => e.includes("OLLAMA_URL"))).toBe(true);
   });
 
+  it("does not require OLLAMA_URL when EMBED_PROVIDER=openai and OPENAI_API_KEY is set", () => {
+    process.env.DATABASE_URL = "postgresql://test:test@localhost:5432/test";
+    process.env.EMBED_PROVIDER = "openai";
+    process.env.OPENAI_API_KEY = "test-openai-key";
+    delete process.env.OLLAMA_URL;
+
+    const errors = validateConfig();
+    expect(errors.some(e => e.includes("OLLAMA_URL"))).toBe(false);
+    expect(errors.some(e => e.includes("OPENAI_API_KEY"))).toBe(false);
+  });
+
+  it("returns error when OPENAI_API_KEY is missing for EMBED_PROVIDER=openai", () => {
+    process.env.DATABASE_URL = "postgresql://test:test@localhost:5432/test";
+    process.env.EMBED_PROVIDER = "openai";
+    delete process.env.OPENAI_API_KEY;
+
+    const errors = validateConfig();
+    expect(errors.some(e => e.includes("OPENAI_API_KEY"))).toBe(true);
+  });
+
+  it("returns error when EMBED_PROVIDER is invalid", () => {
+    process.env.DATABASE_URL = "postgresql://test:test@localhost:5432/test";
+    process.env.EMBED_PROVIDER = "invalid-provider";
+    process.env.OLLAMA_URL = "http://localhost:11434";
+
+    const errors = validateConfig();
+    expect(errors.some(e => e.includes("EMBED_PROVIDER"))).toBe(true);
+  });
+
   it("returns empty array when all required config is present", () => {
     process.env.DATABASE_URL = "postgresql://test:test@localhost:5432/test";
+    delete process.env.EMBED_PROVIDER;
     process.env.OLLAMA_URL = "http://localhost:11434";
 
     const errors = validateConfig();

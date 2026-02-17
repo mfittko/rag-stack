@@ -57,7 +57,13 @@ export async function runMigrations(options?: RunMigrationsOptions): Promise<voi
   `);
 
   // Migration files to run
-  const migrations = ["001_initial.sql", "002_add_payload_checksum.sql", "003_add_raw_data.sql"];
+  const migrations = [
+    "001_initial.sql",
+    "002_add_payload_checksum.sql",
+    "003_add_raw_data.sql",
+    "004_switch_embeddings_to_1536.sql",
+    "005_add_document_summary_levels.sql",
+  ];
 
   for (const migrationFile of migrations) {
     const version = migrationFile.replace(".sql", "");
