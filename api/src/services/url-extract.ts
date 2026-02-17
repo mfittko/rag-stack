@@ -71,10 +71,11 @@ export function extractContent(body: Buffer, contentType: string): ExtractionRes
       // Fallback if Readability fails
       const bodyMarkdown = toMarkdown(dom.window.document.body?.innerHTML);
       const bodyText = dom.window.document.body?.textContent?.trim() || null;
+      const usedMarkdown = bodyMarkdown.length > 0;
 
       return {
         text: bodyMarkdown || bodyText,
-        strategy: "readability",
+        strategy: usedMarkdown ? "turndown" : "plaintext",
         contentType: normalized,
       };
     } catch (error) {

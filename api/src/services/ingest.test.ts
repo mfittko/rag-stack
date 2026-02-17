@@ -201,6 +201,30 @@ describe("ingest service", () => {
     expect(containsNullByte(chunkInsertParams)).toBe(false);
   });
 
+  it("rejects metadata exceeding maximum nesting depth", async () => {
+    const deepMetadata: Record<string, unknown> = {};
+    let cursor: Record<string, unknown> = deepMetadata;
+    for (let i = 0; i < 70; i++) {
+      const next: Record<string, unknown> = {};
+      cursor.next = next;
+      cursor = next;
+    }
+
+    const request: IngestRequest = {
+      items: [
+        {
+          text: "hello world",
+          source: "test.txt",
+          metadata: deepMetadata,
+        },
+      ],
+    };
+
+    await expect(ingest(request, "test-col")).rejects.toThrow(
+      "metadata exceeds maximum nesting depth"
+    );
+  });
+
   it("uses collection+identity conflict handling for overwrite upserts", async () => {
     let documentInsertSql = "";
 

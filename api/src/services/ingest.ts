@@ -79,27 +79,95 @@ function stripNullBytes(value: string): string {
   return value.replace(/\u0000/g, "");
 }
 
-function sanitizeJsonValue(value: unknown): unknown {
+const MAX_METADATA_NESTING_DEPTH = 64;
+
+function isPlainObject(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && Object.getPrototypeOf(value) === Object.prototype;
+}
+
+function sanitizeLeafValue(value: unknown): unknown {
   if (typeof value === "string") {
     return stripNullBytes(value);
   }
 
-  if (Array.isArray(value)) {
-    return value.map((entry) => sanitizeJsonValue(entry));
+  return value;
+}
+
+function sanitizeJsonValue(value: unknown): unknown {
+  if (!Array.isArray(value) && !isPlainObject(value)) {
+    return sanitizeLeafValue(value);
   }
 
-  if (value && Object.getPrototypeOf(value) === Object.prototype) {
-    const record = value as Record<string, unknown>;
-    const sanitized: Record<string, unknown> = {};
+  const seen = new WeakSet<object>();
+  const rootTarget: unknown = Array.isArray(value) ? [] : {};
+  const stack: Array<{
+    source: unknown[] | Record<string, unknown>;
+    target: unknown[] | Record<string, unknown>;
+    depth: number;
+  }> = [
+    {
+      source: value,
+      target: rootTarget as unknown[] | Record<string, unknown>,
+      depth: 0,
+    },
+  ];
 
-    for (const [key, entry] of Object.entries(record)) {
-      sanitized[key] = sanitizeJsonValue(entry);
+  while (stack.length > 0) {
+    const frame = stack.pop()!;
+
+    if (frame.depth > MAX_METADATA_NESTING_DEPTH) {
+      throw new Error(`metadata exceeds maximum nesting depth of ${MAX_METADATA_NESTING_DEPTH}`);
     }
 
-    return sanitized;
+    if (seen.has(frame.source as object)) {
+      throw new Error("metadata contains circular references");
+    }
+    seen.add(frame.source as object);
+
+    if (Array.isArray(frame.source) && Array.isArray(frame.target)) {
+      for (const entry of frame.source) {
+        if (Array.isArray(entry)) {
+          const nextTarget: unknown[] = [];
+          frame.target.push(nextTarget);
+          stack.push({ source: entry, target: nextTarget, depth: frame.depth + 1 });
+          continue;
+        }
+
+        if (isPlainObject(entry)) {
+          const nextTarget: Record<string, unknown> = {};
+          frame.target.push(nextTarget);
+          stack.push({ source: entry, target: nextTarget, depth: frame.depth + 1 });
+          continue;
+        }
+
+        frame.target.push(sanitizeLeafValue(entry));
+      }
+
+      continue;
+    }
+
+    if (isPlainObject(frame.source) && isPlainObject(frame.target)) {
+      for (const [key, entry] of Object.entries(frame.source)) {
+        if (Array.isArray(entry)) {
+          const nextTarget: unknown[] = [];
+          frame.target[key] = nextTarget;
+          stack.push({ source: entry, target: nextTarget, depth: frame.depth + 1 });
+          continue;
+        }
+
+        if (isPlainObject(entry)) {
+          const nextTarget: Record<string, unknown> = {};
+          frame.target[key] = nextTarget;
+          stack.push({ source: entry, target: nextTarget, depth: frame.depth + 1 });
+          continue;
+        }
+
+        frame.target[key] = sanitizeLeafValue(entry);
+      }
+    }
   }
 
-  return value;
+  return rootTarget;
 }
 
 function sanitizeMetadataRecord(value: Record<string, unknown>): Record<string, unknown> {
