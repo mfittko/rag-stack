@@ -23,14 +23,16 @@ vi.mock("../db.js", () => ({
           tier1_meta: {},
           tier2_meta: null,
           tier3_meta: null,
+          doc_summary: null,
+          payload_checksum: "checksum-abc",
         },
       ],
     })),
   })),
 }));
 
-// Mock ollama module
-vi.mock("../ollama.js", () => ({
+// Mock embeddings module
+vi.mock("../embeddings.js", () => ({
   embed: vi.fn(async (texts: string[]) =>
     texts.map(() => Array(768).fill(0.1))
   ),
@@ -86,6 +88,15 @@ describe("query service", () => {
     expect(result.results[0].score).toBeLessThanOrEqual(1);
   });
 
+  it("includes payload checksum in query payload", async () => {
+    const request: QueryRequest = {
+      query: "test",
+    };
+
+    const result = await query(request);
+    expect(result.results[0]?.payload).toMatchObject({ payloadChecksum: "checksum-abc" });
+  });
+
   it("handles empty results gracefully", async () => {
     const { getPool } = await import("../db.js");
     (getPool as any).mockReturnValueOnce({
@@ -136,8 +147,62 @@ describe("query service", () => {
     const firstCallArgs = firstCall as unknown as unknown[];
     const sql = String(firstCallArgs[0] ?? "");
     const params = (firstCallArgs[1] ?? []) as unknown[];
-    expect(sql).toContain("c.doc_type = $4");
-    expect(params[3]).toBe("code");
+    expect(sql).toContain("c.doc_type = $5");
+    expect(params[4]).toBe("code");
+  });
+
+  it("applies auto minScore cutoff of 0.3 for single-term query", async () => {
+    const queryMock = vi.fn(async () => ({ rows: [] }));
+
+    const { getPool } = await import("../db.js");
+    (getPool as any).mockReturnValueOnce({ query: queryMock });
+
+    await query({ query: "hello" });
+
+    const firstCall = queryMock.mock.calls[0] as unknown[];
+    const sql = String(firstCall[0] ?? "");
+    const params = (firstCall[1] ?? []) as unknown[];
+    expect(sql).toContain("AND (c.embedding <=> $2::vector) <= $4");
+    expect(params[3]).toBe(0.7);
+  });
+
+  it("applies auto minScore cutoff of 0.4 for two-term query", async () => {
+    const queryMock = vi.fn(async () => ({ rows: [] }));
+
+    const { getPool } = await import("../db.js");
+    (getPool as any).mockReturnValueOnce({ query: queryMock });
+
+    await query({ query: "github invoice" });
+
+    const firstCall = queryMock.mock.calls[0] as unknown[];
+    const params = (firstCall[1] ?? []) as unknown[];
+    expect(params[3]).toBe(0.6);
+  });
+
+  it("applies auto minScore cutoff of 0.6 for five-term query", async () => {
+    const queryMock = vi.fn(async () => ({ rows: [] }));
+
+    const { getPool } = await import("../db.js");
+    (getPool as any).mockReturnValueOnce({ query: queryMock });
+
+    await query({ query: "github invoice inv89909018 copilot pro" });
+
+    const firstCall = queryMock.mock.calls[0] as unknown[];
+    const params = (firstCall[1] ?? []) as unknown[];
+    expect(params[3]).toBe(0.4);
+  });
+
+  it("applies custom minScore cutoff", async () => {
+    const queryMock = vi.fn(async () => ({ rows: [] }));
+
+    const { getPool } = await import("../db.js");
+    (getPool as any).mockReturnValueOnce({ query: queryMock });
+
+    await query({ query: "hello", minScore: 0.8 });
+
+    const firstCall = queryMock.mock.calls[0] as unknown[];
+    const params = (firstCall[1] ?? []) as unknown[];
+    expect(params[3] as number).toBeCloseTo(0.2, 12);
   });
 
   it("returns graph data when graph expansion is requested", async () => {

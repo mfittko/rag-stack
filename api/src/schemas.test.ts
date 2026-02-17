@@ -339,10 +339,53 @@ describe("query schema validation", () => {
         collection: "my-col",
         query: "auth flow",
         topK: 5,
+        minScore: 0.75,
         filter: { must: [{ key: "lang", match: { value: "ts" } }] },
       },
     });
     expect(res.statusCode).toBe(200);
+    await app.close();
+  });
+
+  it("accepts minScore at bounds 0 and 1", async () => {
+    const app = buildApp();
+
+    const low = await app.inject({
+      method: "POST",
+      url: "/query",
+      payload: { query: "hello", minScore: 0 },
+    });
+    expect(low.statusCode).toBe(200);
+
+    const high = await app.inject({
+      method: "POST",
+      url: "/query",
+      payload: { query: "hello", minScore: 1 },
+    });
+    expect(high.statusCode).toBe(200);
+
+    await app.close();
+  });
+
+  it("rejects minScore below 0", async () => {
+    const app = buildApp();
+    const res = await app.inject({
+      method: "POST",
+      url: "/query",
+      payload: { query: "hello", minScore: -0.1 },
+    });
+    expect(res.statusCode).toBe(400);
+    await app.close();
+  });
+
+  it("rejects minScore above 1", async () => {
+    const app = buildApp();
+    const res = await app.inject({
+      method: "POST",
+      url: "/query",
+      payload: { query: "hello", minScore: 1.1 },
+    });
+    expect(res.statusCode).toBe(400);
     await app.close();
   });
 });
