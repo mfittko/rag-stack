@@ -423,9 +423,15 @@ export async function ingest(
     }
 
     for (const procItem of processedItems) {
+      // Skip only if overwrite=false AND checksums match (idempotent skip for unchanged content)
       if (!shouldOverwrite && existingChecksumsByIdentity.has(procItem.identityKey)) {
-        skippedCount++;
-        continue;
+        const existingChecksum = existingChecksumsByIdentity.get(procItem.identityKey);
+        if (existingChecksum === procItem.payloadChecksum) {
+          // Checksum matches - skip this document as content is unchanged
+          skippedCount++;
+          continue;
+        }
+        // Checksum differs - continue with upsert to update changed content
       }
 
       try {
