@@ -7,7 +7,9 @@ import {
   ingestSchema, 
   querySchema, 
   enrichmentStatusSchema, 
+  enrichmentStatsSchema,
   enrichmentEnqueueSchema, 
+  enrichmentClearSchema,
   graphEntitySchema,
   internalTaskClaimSchema,
   internalTaskResultSchema,
@@ -92,7 +94,7 @@ export function buildApp() {
     return reply.send(result);
   });
 
-  app.get("/enrichment/stats", async (req, reply) => {
+  app.get("/enrichment/stats", { schema: enrichmentStatsSchema }, async (req, reply) => {
     const { collection, filter } = req.query as { collection?: string; filter?: string };
     const result = await getEnrichmentStats({ collection, filter });
     return reply.send(result);
@@ -104,9 +106,10 @@ export function buildApp() {
     return reply.send(result);
   });
 
-  app.post("/enrichment/clear", async (req, reply) => {
-    const body = req.body as any;
-    const result = await clearEnrichmentQueue(body, body.collection);
+  app.post("/enrichment/clear", { schema: enrichmentClearSchema }, async (req, reply) => {
+    const body = req.body && typeof req.body === "object" ? (req.body as Record<string, unknown>) : {};
+    const collection = typeof body.collection === "string" ? body.collection : undefined;
+    const result = await clearEnrichmentQueue(body, collection);
     return reply.send(result);
   });
 

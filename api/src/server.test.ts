@@ -312,6 +312,22 @@ describe("API integration tests", () => {
       expect(res.statusCode).toBe(200);
       await app.close();
     });
+
+    it("POST /enrichment/clear handles null body safely", async () => {
+      const app = buildApp();
+      const res = await app.inject({
+        method: "POST",
+        url: "/enrichment/clear",
+        headers: {
+          authorization: "Bearer test-token",
+          "content-type": "application/json",
+        },
+        payload: "null",
+      });
+
+      expect(res.statusCode).toBe(400);
+      await app.close();
+    });
   });
 
   describe("graph endpoints", () => {

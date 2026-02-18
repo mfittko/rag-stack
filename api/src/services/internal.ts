@@ -23,8 +23,8 @@ function getNonEmptyString(value: unknown): string | null {
  */
 function removeTier3SummaryFields(tier3: Record<string, unknown> | undefined): Record<string, unknown> | undefined {
   if (!tier3) return undefined;
-  
-  const { summary, summary_short, summary_medium, summary_long, ...rest } = tier3 as any;
+
+  const { summary, summary_short, summary_medium, summary_long, ...rest } = tier3;
   return Object.keys(rest).length > 0 ? rest : undefined;
 }
 
@@ -183,7 +183,14 @@ export async function submitTaskResult(taskId: string, result: TaskResultRequest
        SET enrichment_status = 'enriched',
            enriched_at = now(),
            tier2_meta = $1,
-           tier3_meta = COALESCE(c.tier3_meta, '{}'::jsonb) || $2::jsonb
+           tier3_meta = (
+             COALESCE(c.tier3_meta, '{}'::jsonb)
+             - 'summary'
+             - 'summary_short'
+             - 'summary_medium'
+             - 'summary_long'
+             - '_error'
+           ) || $2::jsonb
        FROM documents d
        WHERE c.document_id = d.id
          AND d.base_id = $3
@@ -372,7 +379,8 @@ export async function failTask(taskId: string, failRequest: TaskFailRequest): Pr
               'attempt', $6::int,
               'maxAttempts', $7::int,
               'final', $8::boolean,
-              'failedAt', now()::text
+              'failedAt', now()::text,
+              'chunkIndex', $3::int
             )
           )
         FROM documents d
@@ -399,7 +407,7 @@ export async function failTask(taskId: string, failRequest: TaskFailRequest): Pr
         `UPDATE task_queue
          SET status = 'dead',
              error = $1,
-             finished_at = now()
+             completed_at = now()
          WHERE id = $2`,
         [failRequest.error, taskId]
       );

@@ -188,6 +188,26 @@ describe("enrichment service", () => {
       expect(queueQuery![0]).toContain("websearch_to_tsquery");
       expect(queueQuery![0]).toContain("ILIKE");
     });
+
+    it("falls back to ILIKE-only filter when tsquery syntax is invalid", async () => {
+      const { getPool } = await import("../db.js");
+      const invalidTsQueryError = Object.assign(new Error("syntax error in tsquery"), { code: "42601" });
+      const mockQuery = vi
+        .fn()
+        .mockRejectedValueOnce(invalidTsQueryError)
+        .mockResolvedValueOnce({ rows: [{ status: "pending", count: 2 }] })
+        .mockResolvedValueOnce({ rows: [{ enrichment_status: "pending", count: 2 }] });
+
+      (getPool as any).mockReturnValueOnce({ query: mockQuery });
+
+      const result = await getEnrichmentStats({ filter: "\"unterminated", collection: "docs" });
+
+      expect(result.queue.pending).toBe(2);
+      expect(mockQuery.mock.calls.length).toBe(3);
+      const fallbackQueueSql = mockQuery.mock.calls[1][0] as string;
+      expect(fallbackQueueSql).not.toContain("websearch_to_tsquery");
+      expect(fallbackQueueSql).toContain("ILIKE");
+    });
   });
 
   describe("enqueueEnrichment", () => {
@@ -313,6 +333,43 @@ describe("enrichment service", () => {
       expect(sql).toContain("websearch_to_tsquery");
       expect(sql).toContain("ILIKE");
     });
+
+    it("falls back to ILIKE-only enqueue when tsquery syntax is invalid", async () => {
+      const invalidTsQueryError = Object.assign(new Error("syntax error in tsquery"), { code: "42601" });
+      const clientQuery = vi
+        .fn()
+        .mockRejectedValueOnce(invalidTsQueryError)
+        .mockResolvedValueOnce({
+          rows: [
+            {
+              chunk_id: "test-id:0",
+              document_id: "doc-1",
+              base_id: "test-id",
+              chunk_index: 0,
+              text: "test content",
+              source: "test.txt",
+              doc_type: "text",
+              tier1_meta: {},
+            },
+          ],
+        })
+        .mockResolvedValueOnce({ rows: [{ document_id: "doc-1", total_chunks: 1 }] })
+        .mockResolvedValueOnce({ rows: [] })
+        .mockResolvedValueOnce({ rows: [] });
+
+      const { getPool } = await import("../db.js");
+      (getPool as any).mockReturnValueOnce({
+        query: vi.fn(async () => ({ rows: [] })),
+        connect: vi.fn(async () => ({ query: clientQuery, release: vi.fn() })),
+      });
+
+      const result = await enqueueEnrichment({ collection: "docs", filter: "\"unterminated" });
+
+      expect(result.ok).toBe(true);
+      const fallbackSql = clientQuery.mock.calls[1][0] as string;
+      expect(fallbackSql).not.toContain("websearch_to_tsquery");
+      expect(fallbackSql).toContain("ILIKE");
+    });
   });
 
   describe("clearEnrichmentQueue", () => {
@@ -360,6 +417,27 @@ describe("enrichment service", () => {
 
       expect(result.ok).toBe(true);
       expect(result.cleared).toBe(0);
+    });
+
+    it("falls back to ILIKE-only clear when tsquery syntax is invalid", async () => {
+      const { getPool } = await import("../db.js");
+      const invalidTsQueryError = Object.assign(new Error("syntax error in tsquery"), { code: "42601" });
+      const mockQuery = vi
+        .fn()
+        .mockRejectedValueOnce(invalidTsQueryError)
+        .mockResolvedValueOnce({ rowCount: 1 });
+
+      (getPool as any).mockReturnValueOnce({
+        query: mockQuery,
+      });
+
+      const result = await clearEnrichmentQueue({ collection: "docs", filter: "\"unterminated" });
+
+      expect(result.ok).toBe(true);
+      expect(result.cleared).toBe(1);
+      const fallbackSql = mockQuery.mock.calls[1][0] as string;
+      expect(fallbackSql).not.toContain("websearch_to_tsquery");
+      expect(fallbackSql).toContain("ILIKE");
     });
   });
 });

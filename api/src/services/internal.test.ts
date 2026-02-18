@@ -161,6 +161,18 @@ describe("internal service", () => {
         call[0].includes("UPDATE chunks c")
       );
       expect(chunkUpdateCall).toBeDefined();
+      expect(chunkUpdateCall![0]).toContain("- 'summary'");
+      expect(chunkUpdateCall![0]).toContain("- 'summary_short'");
+      expect(chunkUpdateCall![0]).toContain("- 'summary_medium'");
+      expect(chunkUpdateCall![0]).toContain("- 'summary_long'");
+      expect(chunkUpdateCall![0]).toContain("- '_error'");
+
+      const chunkTier3Payload = JSON.parse(chunkUpdateCall![1][1]);
+      expect(chunkTier3Payload).not.toHaveProperty("summary");
+      expect(chunkTier3Payload).not.toHaveProperty("summary_short");
+      expect(chunkTier3Payload).not.toHaveProperty("summary_medium");
+      expect(chunkTier3Payload).not.toHaveProperty("summary_long");
+      expect(chunkTier3Payload.otherField).toBe("keep this");
 
       // Find the document update query
       const docUpdateCall = mockClientQuery.mock.calls.find((call: any) =>
@@ -303,6 +315,7 @@ describe("internal service", () => {
         call[0].includes("status = 'dead'")
       );
       expect(deadLetterCall).toBeDefined();
+      expect(deadLetterCall![0]).toContain("completed_at = now()");
     });
 
     it("records error metadata in chunk tier3_meta", async () => {
@@ -341,6 +354,8 @@ describe("internal service", () => {
       expect(chunkUpdateCall![0]).toContain("enrichment_status = 'failed'");
       expect(chunkUpdateCall![0]).toContain("jsonb_build_object");
       expect(chunkUpdateCall![0]).toContain("'_error'");
+      expect(chunkUpdateCall![0]).toContain("'chunkIndex'");
+      expect(chunkUpdateCall![1][2]).toBe(5);
     });
 
     it("parses chunk index from chunkId format", async () => {
