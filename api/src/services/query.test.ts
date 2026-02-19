@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { query } from "./query.js";
+import { query, countQueryTerms, getAutoMinScore } from "./query.js";
 import type { QueryRequest } from "./query.js";
 
 // Mock the db module
@@ -38,6 +38,47 @@ vi.mock("../embeddings.js", () => ({
   ),
 }));
 
+describe("countQueryTerms", () => {
+  it("counts single term", () => {
+    expect(countQueryTerms("hello")).toBe(1);
+  });
+
+  it("counts multiple terms", () => {
+    expect(countQueryTerms("hello world foo")).toBe(3);
+  });
+
+  it("ignores extra whitespace", () => {
+    expect(countQueryTerms("  hello   world  ")).toBe(2);
+  });
+
+  it("returns 0 for empty string", () => {
+    expect(countQueryTerms("")).toBe(0);
+  });
+});
+
+describe("getAutoMinScore", () => {
+  it("returns 0.3 for 1 term", () => {
+    expect(getAutoMinScore("hello")).toBe(0.3);
+  });
+
+  it("returns 0.4 for 2 terms", () => {
+    expect(getAutoMinScore("hello world")).toBe(0.4);
+  });
+
+  it("returns 0.5 for 3 terms", () => {
+    expect(getAutoMinScore("hello world foo")).toBe(0.5);
+  });
+
+  it("returns 0.5 for 4 terms", () => {
+    expect(getAutoMinScore("hello world foo bar")).toBe(0.5);
+  });
+
+  it("returns 0.6 for 5+ terms", () => {
+    expect(getAutoMinScore("hello world foo bar baz")).toBe(0.6);
+    expect(getAutoMinScore("a b c d e f")).toBe(0.6);
+  });
+});
+
 describe("query service", () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -74,6 +115,32 @@ describe("query service", () => {
     const result = await query(request);
 
     expect(result.ok).toBe(true);
+  });
+
+  it("uses custom minScore when specified", async () => {
+    const queryMock = vi.fn(async () => ({ rows: [] }));
+    const { getPool } = await import("../db.js");
+    (getPool as any).mockReturnValueOnce({ query: queryMock });
+
+    await query({ query: "hello world", minScore: 0.7 });
+
+    const firstCall = queryMock.mock.calls[0] as unknown as unknown[];
+    const params = (firstCall[1] ?? []) as unknown[];
+    // maxDistance = 1 - 0.7 = 0.3, stored as $4
+    expect(params[3]).toBeCloseTo(0.3);
+  });
+
+  it("uses auto minScore when not specified", async () => {
+    const queryMock = vi.fn(async () => ({ rows: [] }));
+    const { getPool } = await import("../db.js");
+    (getPool as any).mockReturnValueOnce({ query: queryMock });
+
+    // 2 terms → minScore 0.4 → maxDistance 0.6
+    await query({ query: "hello world" });
+
+    const firstCall = queryMock.mock.calls[0] as unknown as unknown[];
+    const params = (firstCall[1] ?? []) as unknown[];
+    expect(params[3]).toBeCloseTo(0.6);
   });
 
   it("converts distance to similarity score", async () => {
@@ -132,6 +199,11 @@ describe("query service", () => {
           tier1_meta: {},
           tier2_meta: null,
           tier3_meta: null,
+          doc_summary: null,
+          doc_summary_short: null,
+          doc_summary_medium: null,
+          doc_summary_long: null,
+          payload_checksum: null,
         },
       ],
     }));
@@ -226,6 +298,11 @@ describe("query service", () => {
             tier1_meta: {},
             tier2_meta: { entities: [{ text: "EntityA" }] },
             tier3_meta: null,
+            doc_summary: null,
+            doc_summary_short: null,
+            doc_summary_medium: null,
+            doc_summary_long: null,
+            payload_checksum: null,
           },
         ],
       })

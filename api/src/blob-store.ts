@@ -1,4 +1,6 @@
 import { createHash } from "node:crypto";
+import { Readable } from "node:stream";
+import type { ReadableStream as WebReadableStream } from "node:stream/web";
 import path from "node:path";
 import { Readable } from "node:stream";
 import { S3Client, PutObjectCommand, GetObjectCommand } from "@aws-sdk/client-s3";
@@ -23,6 +25,12 @@ export interface RawUploadResult {
   key: string;
   bytes: number;
   mimeType: string;
+}
+
+export interface RawBlobDownloadResult {
+  stream: Readable;
+  contentLength: number | null;
+  contentType: string | null;
 }
 
 // Cached S3 client to avoid per-upload instantiation overhead

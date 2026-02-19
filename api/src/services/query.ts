@@ -11,6 +11,18 @@ export interface QueryRequest {
   graphExpand?: boolean;
 }
 
+export function countQueryTerms(value: string): number {
+  return value.trim().split(/\s+/).filter((t) => t.length > 0).length;
+}
+
+export function getAutoMinScore(queryText: string): number {
+  const terms = countQueryTerms(queryText);
+  if (terms <= 1) return 0.3;
+  if (terms === 2) return 0.4;
+  if (terms <= 4) return 0.5;
+  return 0.6;
+}
+
 export interface QueryResultItem {
   id: string | number;
   score: number;
