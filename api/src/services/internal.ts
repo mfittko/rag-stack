@@ -3,11 +3,6 @@
 
 import { getPool } from "../db.js";
 
-// Retry configuration constants
-const RETRY_BASE_SECONDS = 60;
-const RETRY_BACKOFF_MULTIPLIER = 2;
-const MAX_RETRY_DELAY_SECONDS = 3600; // 1 hour
-
 /**
  * Type-safe non-empty string extraction
  */

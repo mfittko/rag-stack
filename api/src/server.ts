@@ -107,7 +107,7 @@ export function buildApp() {
   });
 
   app.post("/enrichment/clear", { schema: enrichmentClearSchema }, async (req, reply) => {
-    const body = req.body && typeof req.body === "object" ? (req.body as Record<string, unknown>) : {};
+    const body = req.body as any;
     const collection = typeof body.collection === "string" ? body.collection : undefined;
     const result = await clearEnrichmentQueue(body, collection);
     return reply.send(result);
