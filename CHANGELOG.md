@@ -6,6 +6,19 @@ The format is based on [Common Changelog](https://common-changelog.org/).
 
 ---
 
+## February 19, 2026
+
+### Added
+
+- **Full-text enrichment filters** ([#99](https://github.com/mfittko/RAGed/pull/99)): Added dual-mode filtering across enrichment stats, enqueue, and queue clearing so operators can target text, sources, types, and summaries with PostgreSQL websearch queries and ILIKE fallbacks.
+- **Enrichment queue clearing** ([#99](https://github.com/mfittko/RAGed/pull/99)): Introduced clearEnrichmentQueue to wipe pending, processing, and dead tasks (with optional filters) for quicker queue resets during operational work.
+- **Structured error metadata** ([#99](https://github.com/mfittko/RAGed/pull/99)): failure handling now records rich error metadata per chunk and surface errors via getEnrichmentStatus, improving diagnostics and retry visibility.
+
+### Changed
+
+- **Document-level summaries** ([#99](https://github.com/mfittko/RAGed/pull/99)): Moved summary_short/medium/long from chunk metadata to the documents table with fallback helpers, ensuring summaries persist at the document level while keeping chunk metadata clean.
+
+
 
 ## February 17, 2026
 
