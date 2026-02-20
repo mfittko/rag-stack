@@ -1,3 +1,7 @@
+---
+title: RAGed Documentation
+---
+
 # raged Documentation
 
 Technical documentation for the raged API, CLI, deployment, and operations.

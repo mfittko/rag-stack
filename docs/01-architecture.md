@@ -38,12 +38,16 @@ Stateless HTTP service exposing core endpoints:
 
 **Ingestion & Query:**
 - `POST /ingest` — Receives text items or URLs (code, docs, PDFs, images, web pages, etc.), optionally fetches URL content server-side with SSRF protection, runs tier-1 extraction, chunks, embeds via Ollama, upserts vectors into Postgres, optionally enqueues enrichment
-- `POST /query` — Embeds the query text, performs similarity search in Postgres using pgvector, optionally expands entities from Postgres relationships, returns ranked results
+- `POST /query` — Embeds the query text, performs similarity search in Postgres using pgvector, supports adaptive/manual `minScore`, optional filters, and optional graph expansion
+- `POST /query/download-first` — Runs query and returns the first match as a downloadable binary (from `raw_data` or blob store key)
+- `POST /query/fulltext-first` — Runs query and returns concatenated chunk text for the first matching document
+- `GET /collections` — Returns collection-level document/chunk/enrichment counts
 
 **Enrichment:**
 - `GET /enrichment/status/:baseId` — Get enrichment status for a document
 - `GET /enrichment/stats` — System-wide enrichment statistics
 - `POST /enrichment/enqueue` — Manually trigger enrichment for existing chunks
+- `POST /enrichment/clear` — Clear pending/processing/dead enrichment tasks (optional text filter)
 
 **Knowledge Graph:**
 - `GET /graph/entity/:name` — Lookup entity details and connections in Postgres
@@ -70,7 +74,7 @@ Runs the `nomic-embed-text` model locally for embeddings, and LLM models (llama3
 ### Postgres Task Queue
 
 Holds enrichment tasks using a Postgres table with SKIP LOCKED for concurrent processing:
-- `enrichment_tasks` table — tasks with status tracking
+- `task_queue` table (`queue = 'enrichment'`) — tasks with status tracking
 - Workers use `FOR UPDATE SKIP LOCKED` to claim tasks without contention
 - Failed tasks tracked via status field after max retries
 

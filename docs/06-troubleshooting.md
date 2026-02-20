@@ -136,7 +136,7 @@ docker compose logs enrichment-worker --tail 50
 kubectl logs -l app=worker -n rag --tail 50
 
 # Check Postgres task queue directly
-psql -h localhost -U raged -d raged -c "SELECT status, COUNT(*) FROM enrichment_tasks GROUP BY status;"
+psql -h localhost -U raged -d raged -c "SELECT status, COUNT(*) FROM task_queue WHERE queue = 'enrichment' GROUP BY status;"
 
 # Restart worker if stuck
 docker compose restart enrichment-worker
@@ -152,7 +152,7 @@ kubectl rollout restart deployment/worker -n rag
 
 ```bash
 # Check failed tasks in Postgres
-psql -h localhost -U raged -d raged -c "SELECT * FROM enrichment_tasks WHERE status = 'failed' ORDER BY updated_at DESC LIMIT 10;"
+psql -h localhost -U raged -d raged -c "SELECT id, status, payload, completed_at FROM task_queue WHERE queue = 'enrichment' AND status = 'dead' ORDER BY completed_at DESC LIMIT 10;"
 
 # Check worker logs for errors
 docker compose logs enrichment-worker --tail 100 | grep -i error

@@ -25,6 +25,7 @@ graph LR
 2. **Embed** each chunk using a local model (Ollama + nomic-embed-text)
 3. **Store** embeddings in Postgres with pgvector
 4. **Query** by natural language — semantic similarity search for context-rich results
+5. **Download** first matched source as raw binary or reconstructed full text via dedicated query endpoints
 
 AI agents (Claude Code, OpenClaw, or any HTTP/CLI-capable agent) use this to retrieve grounded context without stuffing entire knowledge bases into their context window. Vector search finds *what's relevant*; entity relationships find *what's connected*.
 
@@ -112,7 +113,7 @@ node dist/index.js query \
 
 ## Documentation
 
-Documentation Site (GitHub Pages): https://mfittko.github.io/raged/
+Documentation Site (GitHub Pages): https://mfittko.github.io/RAGed/
 
 | Doc | Topic |
 |-----|-------|
