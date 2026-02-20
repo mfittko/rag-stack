@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
 import { cmdIngest } from "./ingest.js";
 import * as utils from "../lib/utils.js";
+import * as urlCheck from "../lib/url-check.js";
 import path from "node:path";
 import fs from "node:fs/promises";
 import os from "node:os";
@@ -733,5 +734,154 @@ describe("ingest command", () => {
     });
 
     globalThis.fetch = fetchMock;
+  });
+});
+
+describe("ingest command urls-file and url-check", () => {
+  let originalFetch: typeof globalThis.fetch;
+
+  beforeEach(() => {
+    originalFetch = globalThis.fetch;
+    vi.restoreAllMocks();
+  });
+
+  it("should ingest URLs from --urls-file in batches and ignore comments/empty lines", async () => {
+    const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), "raged-urls-file-"));
+    const urlsFile = path.join(tempDir, "urls.txt");
+    await fs.writeFile(
+      urlsFile,
+      [
+        "# comment",
+        "https://example.com/a",
+        "",
+        "https://example.com/b",
+        "https://example.com/c",
+      ].join("\n"),
+    );
+
+    const batchSizes: number[] = [];
+    globalThis.fetch = async (_url: string | URL | Request, init?: RequestInit) => {
+      const body = JSON.parse(init?.body as string);
+      batchSizes.push(body.items.length);
+      return new Response(JSON.stringify({ upserted: body.items.length, errors: [] }), {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      });
+    };
+
+    await cmdIngest({ urlsFile, batchSize: "2" });
+    expect(batchSizes).toEqual([2, 1]);
+
+    await fs.rm(tempDir, { recursive: true, force: true });
+  });
+
+  it("should exit when --urls-file contains no URLs", async () => {
+    const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), "raged-urls-file-"));
+    const urlsFile = path.join(tempDir, "empty-urls.txt");
+    await fs.writeFile(urlsFile, "# only comments\n\n");
+
+    const exitSpy = process.exit;
+    let exitCode = 0;
+    process.exit = ((code: number) => {
+      exitCode = code;
+      throw new Error("exit");
+    }) as never;
+
+    try {
+      await cmdIngest({ urlsFile });
+    } catch {
+      // expected
+    }
+
+    expect(exitCode).toBe(2);
+    process.exit = exitSpy;
+    await fs.rm(tempDir, { recursive: true, force: true });
+  });
+
+  it("should exit when --urls-file contains invalid URLs", async () => {
+    const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), "raged-urls-file-"));
+    const urlsFile = path.join(tempDir, "invalid-urls.txt");
+    await fs.writeFile(urlsFile, "https://example.com/ok\nnot-a-url\n");
+
+    const exitSpy = process.exit;
+    let exitCode = 0;
+    process.exit = ((code: number) => {
+      exitCode = code;
+      throw new Error("exit");
+    }) as never;
+
+    try {
+      await cmdIngest({ urlsFile });
+    } catch {
+      // expected
+    }
+
+    expect(exitCode).toBe(2);
+    process.exit = exitSpy;
+    await fs.rm(tempDir, { recursive: true, force: true });
+  });
+
+  it("should exit when --url-check is used without OPENAI_API_KEY", async () => {
+    const originalKey = process.env.OPENAI_API_KEY;
+    delete process.env.OPENAI_API_KEY;
+
+    const exitSpy = process.exit;
+    let exitCode = 0;
+    process.exit = ((code: number) => {
+      exitCode = code;
+      throw new Error("exit");
+    }) as never;
+
+    try {
+      await cmdIngest({ url: "https://example.com/a", urlCheck: true });
+    } catch {
+      // expected
+    }
+
+    expect(exitCode).toBe(2);
+    process.exit = exitSpy;
+    process.env.OPENAI_API_KEY = originalKey;
+  });
+
+  it("should filter URLs with --url-check and ingest only passed entries", async () => {
+    const originalKey = process.env.OPENAI_API_KEY;
+    process.env.OPENAI_API_KEY = "test-key";
+
+    vi.spyOn(urlCheck, "checkUrls").mockResolvedValue([
+      { url: "https://example.com/pass", reachable: true, meaningful: true, reason: "good" },
+      { url: "https://example.com/skip", reachable: true, meaningful: false, reason: "thin" },
+    ]);
+
+    const ingested: string[] = [];
+    globalThis.fetch = async (_url: string | URL | Request, init?: RequestInit) => {
+      const body = JSON.parse(init?.body as string);
+      ingested.push(...body.items.map((item: { url: string }) => item.url));
+      return new Response(JSON.stringify({ upserted: body.items.length, errors: [] }), {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      });
+    };
+
+    await cmdIngest({ url: "https://example.com/pass", urlCheck: true });
+    expect(ingested).toEqual(["https://example.com/pass"]);
+
+    process.env.OPENAI_API_KEY = originalKey;
+  });
+
+  it("should stop ingestion when all URLs are skipped by --url-check", async () => {
+    const originalKey = process.env.OPENAI_API_KEY;
+    process.env.OPENAI_API_KEY = "test-key";
+
+    vi.spyOn(urlCheck, "checkUrls").mockResolvedValue([
+      { url: "https://example.com/skip", reachable: true, meaningful: false, reason: "thin" },
+    ]);
+
+    const fetchSpy = vi.fn<typeof globalThis.fetch>();
+    globalThis.fetch = fetchSpy;
+
+    await cmdIngest({ url: "https://example.com/skip", urlCheck: true });
+    expect(fetchSpy).not.toHaveBeenCalled();
+
+    process.env.OPENAI_API_KEY = originalKey;
   });
 });

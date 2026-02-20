@@ -29,10 +29,10 @@ function stripHtml(html: string): string {
 }
 
 async function fetchSnippet(url: string): Promise<{ ok: boolean; snippet: string; error?: string }> {
-  try {
-    const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
 
+  try {
     const res = await fetch(url, {
       signal: controller.signal,
       headers: {
@@ -41,8 +41,6 @@ async function fetchSnippet(url: string): Promise<{ ok: boolean; snippet: string
       },
       redirect: "follow",
     });
-
-    clearTimeout(timer);
 
     if (!res.ok) {
       return { ok: false, snippet: "", error: `HTTP ${res.status}` };
@@ -72,6 +70,8 @@ async function fetchSnippet(url: string): Promise<{ ok: boolean; snippet: string
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     return { ok: false, snippet: "", error: message };
+  } finally {
+    clearTimeout(timer);
   }
 }
 
@@ -159,23 +159,23 @@ export async function checkUrls(
   model = OPENAI_DEFAULT_MODEL,
   concurrency = 5,
 ): Promise<UrlCheckResult[]> {
-  const results: UrlCheckResult[] = [];
-  const queue = [...urls];
+  const results: UrlCheckResult[] = new Array(urls.length);
+  const queue: Array<{ index: number; url: string }> = urls.map((url, index) => ({ index, url }));
   let completed = 0;
 
   async function worker(): Promise<void> {
     while (queue.length > 0) {
-      const url = queue.shift();
-      if (!url) break;
+      const next = queue.shift();
+      if (!next) break;
 
-      const result = await checkUrl(url, apiKey, baseUrl, model);
-      results.push(result);
+      const result = await checkUrl(next.url, apiKey, baseUrl, model);
+      results[next.index] = result;
       completed += 1;
 
       const icon = result.meaningful ? "✓" : "✗";
       const status = result.reachable ? (result.meaningful ? "pass" : "skip") : "unreachable";
       logger.info(
-        `[url-check] ${icon} (${completed}/${urls.length}) [${status}] ${url} — ${result.reason}`,
+        `[url-check] ${icon} (${completed}/${urls.length}) [${status}] ${next.url} — ${result.reason}`,
       );
     }
   }

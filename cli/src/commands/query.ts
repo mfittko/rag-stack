@@ -119,11 +119,13 @@ function resolveMinScore(minScoreOption: string | undefined, queryText: string):
   }
 
   const parsed = Number(normalized);
-  if (Number.isFinite(parsed)) {
+  if (Number.isFinite(parsed) && parsed >= 0 && parsed <= 1) {
     return parsed;
   }
 
-  logger.warn(`Invalid --minScore value '${minScoreOption}', falling back to auto.`);
+  logger.warn(
+    `Invalid --minScore value '${minScoreOption}'. It must be a number between 0 and 1 (inclusive); falling back to auto.`
+  );
   return getAutoMinScore(queryText);
 }
 
@@ -249,7 +251,18 @@ async function writeOpenTempFile(fileName: string, bytes: Buffer): Promise<strin
   const parsed = path.parse(fileName || "download.bin");
   const baseName = parsed.name || "download";
   const ext = parsed.ext || ".bin";
-  const target = path.join(tempDir, `${baseName}${ext}`);
+  let target = path.join(tempDir, `${baseName}${ext}`);
+  let suffix = 1;
+
+  while (true) {
+    try {
+      await fs.access(target);
+      target = path.join(tempDir, `${baseName} (${suffix})${ext}`);
+      suffix += 1;
+    } catch {
+      break;
+    }
+  }
 
   await fs.writeFile(target, bytes);
   return target;
@@ -281,7 +294,7 @@ function openTarget(target: string): void {
   const opener = process.platform === "darwin"
     ? { command: "open", args: [target] }
     : process.platform === "win32"
-      ? { command: "cmd", args: ["/c", "start", "", target] }
+      ? { command: "explorer", args: [target] }
       : { command: "xdg-open", args: [target] };
 
   const child = spawn(opener.command, opener.args, {
@@ -340,11 +353,19 @@ export async function cmdQuery(options: QueryOptions, deps: QueryCommandDeps = {
   }
 
   if (allCollections) {
-    const discovered = await getCollections(api, token);
-    const discoveredNames = discovered.map(item => item.collection).filter(name => name.length > 0);
-    targetCollections = discoveredNames.length > 0
-      ? discoveredNames
-      : ["docs"];
+    try {
+      const discovered = await getCollections(api, token);
+      const discoveredNames = discovered
+        .map(item => item.collection.trim())
+        .filter(name => name.length > 0)
+        .sort();
+      targetCollections = discoveredNames.length > 0
+        ? discoveredNames
+        : ["docs"];
+    } catch {
+      logger.warn("Failed to auto-discover collections, falling back to default 'docs' collection.");
+      targetCollections = ["docs"];
+    }
   }
 
   // Build plain filter object for Postgres-backed API
@@ -445,6 +466,10 @@ export async function cmdQuery(options: QueryOptions, deps: QueryCommandDeps = {
       logger.info(`Downloaded first match text to: ${downloadedPath}`);
     }
   } else if (shouldDownload || !looksLikeHttpUrl(firstSource)) {
+    if (!shouldDownload && shouldOpen && !looksLikeHttpUrl(firstSource)) {
+      logger.info("Opening a non-URL source requires a temporary download to open it locally.");
+    }
+
     const download = await downloadFirstQueryMatch(
       api,
       first.collection,
@@ -489,7 +514,7 @@ export function registerQueryCommand(program: Command): void {
     .option("--full", "Download first match extracted text to ~/Downloads as .txt")
     .option("--stdout", "When used with --full, print extracted text to stdout instead of downloading")
     .option("--download", "Download first result raw file to ~/Downloads")
-    .option("--open", "Open first result (URL or temp-downloaded file)")
+    .option("--open", "Open first result (URL directly, or by temp-downloading non-URL sources)")
     .option("--repoId <id>", "Filter by repository ID")
     .option("--pathPrefix <prefix>", "Filter by file path prefix")
     .option("--lang <lang>", "Filter by language")

@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
-import { checkUrl } from "./url-check.js";
+import { checkUrl, checkUrls } from "./url-check.js";
 
 describe("url-check", () => {
   let originalFetch: typeof globalThis.fetch;
@@ -215,5 +215,40 @@ describe("url-check", () => {
 
     expect(capturedUrl).toBe("https://custom-api.example.com/v1/chat/completions");
     expect(capturedModel).toBe("gpt-4o");
+  });
+
+  it("should preserve input order in checkUrls results", async () => {
+    globalThis.fetch = async (url: string | URL | Request, init?: RequestInit) => {
+      const urlStr = url instanceof Request ? url.url : url.toString();
+
+      if (urlStr.includes("api.openai.com")) {
+        return new Response(
+          JSON.stringify({
+            choices: [
+              {
+                message: {
+                  content: JSON.stringify({ meaningful: true, reason: "ok" }),
+                },
+              },
+            ],
+          }),
+          { status: 200, headers: { "content-type": "application/json" } },
+        );
+      }
+
+      if (urlStr.includes("/slow")) {
+        await new Promise((resolve) => setTimeout(resolve, 25));
+      }
+
+      return new Response("<html><body><p>This page has enough content to pass validation checks for testing order.</p></body></html>", {
+        status: 200,
+        headers: { "content-type": "text/html" },
+      });
+    };
+
+    const urls = ["https://example.com/slow", "https://example.com/fast"];
+    const results = await checkUrls(urls, "test-key", "https://api.openai.com/v1", "gpt-4o-mini", 2);
+
+    expect(results.map((item) => item.url)).toEqual(urls);
   });
 });

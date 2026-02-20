@@ -47,7 +47,16 @@ function normalizeIgnorePattern(pattern: string): string {
 }
 
 function escapeRegExp(value: string): string {
-  return value.replace(/[|\\{}()[\]^$+?.]/g, "\\$&");
+  return value.replace(/[|\\{}()[\]^$+?*.]/g, "\\$&");
+}
+
+function isValidIngestUrl(value: string): boolean {
+  try {
+    const parsed = new URL(value);
+    return parsed.protocol === "http:" || parsed.protocol === "https:";
+  } catch {
+    return false;
+  }
 }
 
 function globPatternToRegExp(pattern: string): RegExp {
@@ -220,6 +229,12 @@ export async function cmdIngest(options: IngestOptions): Promise<void> {
     logger.info(`[rag-index] Loaded ${urlsToIngest.length} URLs from ${urlsFile}`);
   }
 
+  const invalidUrls = urlsToIngest.filter((value) => !isValidIngestUrl(value));
+  if (invalidUrls.length > 0) {
+    logger.error(`Error: Invalid URL(s) provided: ${invalidUrls.join(", ")}`);
+    process.exit(2);
+  }
+
   // Handle URL ingestion (single or batch)
   if (urlsToIngest.length > 0) {
     // Optional URL content check via OpenAI
@@ -324,14 +339,13 @@ export async function cmdIngest(options: IngestOptions): Promise<void> {
   const items: IngestItem[] = [];
   let queuedForIngest = 0;
   let batchNumber = 0;
+  let scannedFiles = 0;
   
   for (const filePath of filesToProcess) {
+    scannedFiles += 1;
+
     try {
       const detectedDocType = detectDocType(filePath);
-
-      if (dir && docTypeOverride && detectedDocType !== docTypeOverride) {
-        continue;
-      }
 
       const docType = docTypeOverride || detectedDocType;
       
@@ -390,7 +404,7 @@ export async function cmdIngest(options: IngestOptions): Promise<void> {
         const batchItems = items.splice(0, items.length);
         const batchStart = queuedForIngest - batchItems.length + 1;
         const batchEnd = queuedForIngest;
-        const progressPct = Math.round((batchEnd / filesToProcess.length) * 100);
+        const progressPct = Math.round((scannedFiles / filesToProcess.length) * 100);
         logger.info(
           `[rag-index] Ingesting batch ${batchNumber} (${batchItems.length} files, ${batchStart}-${batchEnd}/${filesToProcess.length}, ${progressPct}%)...`
         );
@@ -406,7 +420,7 @@ export async function cmdIngest(options: IngestOptions): Promise<void> {
     const batchItems = items.splice(0, items.length);
     const batchStart = queuedForIngest - batchItems.length + 1;
     const batchEnd = queuedForIngest;
-    const progressPct = Math.round((batchEnd / filesToProcess.length) * 100);
+    const progressPct = Math.round((scannedFiles / filesToProcess.length) * 100);
     logger.info(
       `[rag-index] Ingesting final batch ${batchNumber} (${batchItems.length} files, ${batchStart}-${batchEnd}/${filesToProcess.length}, ${progressPct}%)...`
     );

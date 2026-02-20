@@ -420,4 +420,160 @@ describe("query command", () => {
     writeSpy.mockRestore();
     await fs.rm(tempHome, { recursive: true, force: true });
   });
+
+  it("should validate --minScore range and fall back to auto", async () => {
+    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+
+    globalThis.fetch = async (_url: string | URL | Request, init?: RequestInit) => {
+      const body = JSON.parse(init?.body as string);
+      expect(body.minScore).toBe(0.3);
+
+      return new Response(JSON.stringify({ results: [] }), {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      });
+    };
+
+    await cmdQuery({ q: "invoice", minScore: "1.5" });
+    expect(warnSpy).toHaveBeenCalled();
+  });
+
+  it("should query all discovered collections when --allCollections is set", async () => {
+    const seenQueries: string[] = [];
+
+    globalThis.fetch = async (url: string | URL | Request, init?: RequestInit) => {
+      const requestUrl = String(url);
+
+      if (requestUrl.endsWith("/collections")) {
+        return new Response(
+          JSON.stringify({ collections: [{ collection: "downloads-pdf" }, { collection: "docs" }] }),
+          { status: 200, headers: { "content-type": "application/json" } },
+        );
+      }
+
+      if (requestUrl.endsWith("/query")) {
+        const body = JSON.parse(init?.body as string);
+        seenQueries.push(body.collection);
+        return new Response(JSON.stringify({ results: [{ text: body.collection, source: `${body.collection}.md`, score: 0.8 }] }), {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        });
+      }
+
+      return new Response("not found", { status: 404 });
+    };
+
+    await cmdQuery({ q: "invoice", allCollections: true });
+    expect(seenQueries).toEqual(["docs", "downloads-pdf"]);
+  });
+
+  it("should fall back to docs when --allCollections discovery fails", async () => {
+    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const seenQueries: string[] = [];
+
+    globalThis.fetch = async (url: string | URL | Request, init?: RequestInit) => {
+      const requestUrl = String(url);
+
+      if (requestUrl.endsWith("/collections")) {
+        return new Response("boom", { status: 500 });
+      }
+
+      if (requestUrl.endsWith("/query")) {
+        const body = JSON.parse(init?.body as string);
+        seenQueries.push(body.collection);
+        return new Response(JSON.stringify({ results: [] }), {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        });
+      }
+
+      return new Response("not found", { status: 404 });
+    };
+
+    await cmdQuery({ q: "invoice", allCollections: true });
+    expect(seenQueries).toEqual(["docs"]);
+    expect(warnSpy).toHaveBeenCalled();
+  });
+
+  it("should print requested summary level and keyword fallbacks", async () => {
+    const infoSpy = vi.spyOn(console, "log").mockImplementation(() => {});
+
+    globalThis.fetch = async () => {
+      return new Response(
+        JSON.stringify({
+          results: [
+            {
+              text: "snippet",
+              score: 0.9,
+              source: "one.md",
+              payload: {
+                docSummaryLong: "Long summary",
+                tier3Meta: { key_entities: ["alpha", "beta"] },
+              },
+            },
+            {
+              text: "snippet2",
+              score: 0.85,
+              source: "two.md",
+              payload: {
+                tier2Meta: { keywords: [{ text: "tier2-a" }, "tier2-b"] },
+              },
+            },
+          ],
+        }),
+        {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        },
+      );
+    };
+
+    await cmdQuery({ q: "invoice", summary: "long", keywords: true, topK: "2" });
+
+    const output = infoSpy.mock.calls.map((args) => String(args[0] ?? ""));
+    expect(output).toContain("summary: Long summary");
+    expect(output).toContain("keywords: alpha, beta");
+    expect(output).toContain("keywords: tier2-a, tier2-b");
+  });
+
+  it("should create a unique temp file name for repeated --open downloads", async () => {
+    const queryResults = {
+      results: [{ text: "content", score: 0.95, source: "dup.pdf" }],
+    };
+
+    globalThis.fetch = async (url: string | URL | Request) => {
+      const value = String(url);
+      if (value.endsWith("/query")) {
+        return new Response(JSON.stringify(queryResults), {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        });
+      }
+
+      if (value.endsWith("/query/download-first")) {
+        return new Response(Buffer.from("bytes"), {
+          status: 200,
+          headers: {
+            "content-type": "application/pdf",
+            "content-disposition": 'attachment; filename="dup.pdf"',
+            "x-raged-source": "dup.pdf",
+          },
+        });
+      }
+
+      return new Response("not found", { status: 404 });
+    };
+
+    const openDir = path.join(os.tmpdir(), "raged-open");
+    await fs.rm(openDir, { recursive: true, force: true });
+
+    await cmdQuery({ q: "dup", open: true }, { openTargetFn: () => {} });
+    await cmdQuery({ q: "dup", open: true }, { openTargetFn: () => {} });
+
+    const files = await fs.readdir(openDir);
+    expect(files).toContain("dup.pdf");
+    expect(files).toContain("dup (1).pdf");
+
+    await fs.rm(openDir, { recursive: true, force: true });
+  });
 });
