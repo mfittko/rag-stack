@@ -5,6 +5,7 @@ from unittest.mock import AsyncMock, patch
 import pytest
 
 from src.pipeline import (
+    _normalize_tier3_metadata,
     process_task,
     run_document_level_extraction,
     run_tier2_extraction,
@@ -195,3 +196,60 @@ async def test_run_document_level_extraction():
         assert result["relationships"][0]["source"] == "A"
         assert result["relationships"][0]["target"] == "B"
         assert result["relationships"][0]["type"] == "uses"
+
+
+def test_normalize_tier3_metadata_summary_cascade():
+    """Summary levels cascade from longer to shorter when missing."""
+    meta = {"summary_long": "A long summary about the document."}
+    result = _normalize_tier3_metadata(meta)
+    assert result["summary_medium"] == "A long summary about the document."
+    assert result["summary_short"] == "A long summary about the document."
+
+
+def test_normalize_tier3_metadata_invoice_date_appended():
+    """Invoice date is appended to summaries when is_invoice=True."""
+    meta = {
+        "summary_medium": "Invoice for services",
+        "invoice": {
+            "is_invoice": True,
+            "invoice_date": "2026-01-15",
+            "invoice_number": "INV-001",
+        },
+    }
+    result = _normalize_tier3_metadata(meta)
+    assert "2026-01-15" in result["summary_medium"]
+
+
+def test_normalize_tier3_metadata_invoice_identifier_synced():
+    """invoice_number is synced to invoice_identifier when identifier is missing."""
+    meta = {
+        "summary_medium": "Invoice for services",
+        "invoice": {
+            "is_invoice": True,
+            "invoice_number": "INV-002",
+            "invoice_identifier": None,
+            "invoice_date": "2026-01-20",
+        },
+    }
+    result = _normalize_tier3_metadata(meta)
+    assert result["invoice"]["invoice_identifier"] == "INV-002"
+
+
+def test_normalize_tier3_metadata_keywords_from_key_entities():
+    """Keywords fall back to key_entities when keywords is absent."""
+    meta = {
+        "summary": "A document",
+        "key_entities": ["EntityA", "EntityB"],
+    }
+    result = _normalize_tier3_metadata(meta)
+    assert result["keywords"] == ["EntityA", "EntityB"]
+
+
+def test_normalize_tier3_metadata_keywords_stripped():
+    """Keywords are stripped of whitespace and empty values are filtered."""
+    meta = {
+        "summary": "A document",
+        "keywords": ["  keyword1  ", "", "keyword2", "  "],
+    }
+    result = _normalize_tier3_metadata(meta)
+    assert result["keywords"] == ["keyword1", "keyword2"]

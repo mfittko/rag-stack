@@ -13,10 +13,14 @@ class ActionItem(BaseModel):
 class EmailMetadata(BaseModel):
     """Metadata extracted from email messages."""
 
-    urgency: str  # low, normal, high, critical
-    intent: str  # request, fyi, approval, escalation
+    urgency: str = ""  # low, normal, high, critical
+    intent: str = ""  # request, fyi, approval, escalation
     action_items: list[ActionItem] = Field(default_factory=list)
-    summary: str
+    summary: str = ""
+    summary_short: str = ""
+    summary_medium: str = ""
+    summary_long: str = ""
+    keywords: list[str] = Field(default_factory=list)
 
 
 # Prompt template for email metadata extraction

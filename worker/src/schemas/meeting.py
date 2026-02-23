@@ -24,6 +24,11 @@ class MeetingMetadata(BaseModel):
     decisions: list[str] = Field(default_factory=list)
     action_items: list[ActionItem] = Field(default_factory=list)
     topic_segments: list[TopicSegment] = Field(default_factory=list)
+    summary: str = ""
+    summary_short: str = ""
+    summary_medium: str = ""
+    summary_long: str = ""
+    keywords: list[str] = Field(default_factory=list)
 
 
 # Prompt template for meeting metadata extraction

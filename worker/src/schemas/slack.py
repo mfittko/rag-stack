@@ -13,10 +13,14 @@ class ActionItem(BaseModel):
 class SlackMetadata(BaseModel):
     """Metadata extracted from Slack messages."""
 
-    summary: str
+    summary: str = ""
+    summary_short: str = ""
+    summary_medium: str = ""
+    summary_long: str = ""
+    keywords: list[str] = Field(default_factory=list)
     decisions: list[str] = Field(default_factory=list)
     action_items: list[ActionItem] = Field(default_factory=list)
-    sentiment: str  # positive, neutral, negative
+    sentiment: str = ""  # positive, neutral, negative
 
 
 # Prompt template for Slack metadata extraction

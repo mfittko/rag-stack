@@ -250,3 +250,85 @@ def test_text_schema_explicit():
     schema_class, prompt = get_schema_for_doctype("text")
     assert schema_class == TextMetadata
     assert "text" in prompt.lower() or "generic" in prompt.lower()
+
+
+def test_pdf_invoice_schema():
+    """Test PDF schema with full invoice metadata and line items."""
+    from src.schemas.pdf import InvoiceLineItem, InvoiceMetadata, PDFMetadata
+
+    line_item = InvoiceLineItem(
+        description="Consulting services",
+        quantity="10",
+        unit_price="100.00",
+        amount="1000.00",
+        vat_rate="20%",
+    )
+    invoice = InvoiceMetadata(
+        is_invoice=True,
+        sender="Acme Corp",
+        receiver="Client Ltd",
+        invoice_identifier="INV-2026-001",
+        invoice_number="INV-2026-001",
+        invoice_date="2026-01-15",
+        due_date="2026-02-15",
+        currency="EUR",
+        subtotal="1000.00",
+        vat_amount="200.00",
+        total_amount="1200.00",
+        line_items=[line_item],
+    )
+    metadata = PDFMetadata(
+        summary="Invoice for consulting services",
+        summary_short="Consulting invoice",
+        summary_medium="Invoice for consulting services in Jan 2026",
+        summary_long="Detailed invoice for consulting services provided in January 2026",
+        keywords=["invoice", "consulting"],
+        invoice=invoice,
+    )
+
+    assert metadata.invoice.is_invoice is True
+    assert metadata.invoice.sender == "Acme Corp"
+    assert metadata.invoice.invoice_number == "INV-2026-001"
+    assert len(metadata.invoice.line_items) == 1
+    assert metadata.invoice.line_items[0].description == "Consulting services"
+    assert metadata.keywords == ["invoice", "consulting"]
+    assert metadata.summary_short == "Consulting invoice"
+
+
+def test_pdf_schema_default_invoice():
+    """Test that PDFMetadata has a default InvoiceMetadata with is_invoice=False."""
+    from src.schemas.pdf import PDFMetadata
+
+    metadata = PDFMetadata(summary="A PDF document")
+    assert metadata.invoice.is_invoice is False
+    assert metadata.invoice.sender == ""
+    assert metadata.invoice.line_items == []
+
+
+def test_schemas_have_summary_fields():
+    """Test that all schemas include the new summary and keywords fields."""
+    from src.schemas.article import ArticleMetadata
+    from src.schemas.code import CodeMetadata
+    from src.schemas.email import EmailMetadata
+    from src.schemas.image import ImageMetadata
+    from src.schemas.meeting import MeetingMetadata
+    from src.schemas.pdf import PDFMetadata
+    from src.schemas.slack import SlackMetadata
+    from src.schemas.text import TextMetadata
+
+    for cls in [
+        ArticleMetadata,
+        CodeMetadata,
+        EmailMetadata,
+        ImageMetadata,
+        MeetingMetadata,
+        PDFMetadata,
+        SlackMetadata,
+        TextMetadata,
+    ]:
+        instance = cls()
+        assert hasattr(instance, "summary_short"), f"{cls.__name__} missing summary_short"
+        assert hasattr(instance, "summary_medium"), f"{cls.__name__} missing summary_medium"
+        assert hasattr(instance, "summary_long"), f"{cls.__name__} missing summary_long"
+        assert hasattr(instance, "keywords"), f"{cls.__name__} missing keywords"
+        assert isinstance(instance.keywords, list), f"{cls.__name__}.keywords must be a list"

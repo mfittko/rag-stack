@@ -10,12 +10,44 @@ class Section(BaseModel):
     summary: str
 
 
+class InvoiceLineItem(BaseModel):
+    """A line item in an invoice."""
+
+    description: str = ""
+    quantity: str = ""
+    unit_price: str = ""
+    amount: str = ""
+    vat_rate: str = ""
+
+
+class InvoiceMetadata(BaseModel):
+    """Structured invoice data extracted from a PDF."""
+
+    is_invoice: bool = False
+    sender: str = ""
+    receiver: str = ""
+    invoice_identifier: str | None = None
+    invoice_number: str = ""
+    invoice_date: str = ""
+    due_date: str = ""
+    currency: str = ""
+    subtotal: str = ""
+    vat_amount: str = ""
+    total_amount: str = ""
+    line_items: list[InvoiceLineItem] = Field(default_factory=list)
+
+
 class PDFMetadata(BaseModel):
     """Metadata extracted from PDF documents."""
 
-    summary: str
+    summary: str = ""
+    summary_short: str = ""
+    summary_medium: str = ""
+    summary_long: str = ""
+    keywords: list[str] = Field(default_factory=list)
     key_entities: list[str] = Field(default_factory=list)
     sections: list[Section] = Field(default_factory=list)
+    invoice: InvoiceMetadata = Field(default_factory=InvoiceMetadata)
 
 
 # Prompt template for PDF metadata extraction

@@ -1,14 +1,18 @@
 """Code document metadata extraction schema."""
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 
 class CodeMetadata(BaseModel):
     """Metadata extracted from code documents."""
 
-    summary: str
-    purpose: str
-    complexity: str  # low, medium, high
+    summary: str = ""
+    summary_short: str = ""
+    summary_medium: str = ""
+    summary_long: str = ""
+    keywords: list[str] = Field(default_factory=list)
+    purpose: str = ""
+    complexity: str = ""  # low, medium, high
 
 
 # Prompt template for code metadata extraction
