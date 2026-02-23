@@ -28,6 +28,10 @@ PROMPT = """Analyze this Slack conversation and extract metadata.
 
 Provide:
 - summary: A brief summary of the conversation
+- summary_short: A one-sentence summary (≤20 words)
+- summary_medium: A 2-3 sentence summary
+- summary_long: A comprehensive summary (4-6 sentences)
+- keywords: List of key topics or themes (5-10 items)
 - decisions: List of decisions made in the conversation
 - action_items: List of action items with task and assignee (if mentioned)
 - sentiment: Overall sentiment of the conversation (positive, neutral, or negative)

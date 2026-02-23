@@ -25,6 +25,11 @@ Provide:
 - detected_objects: List of main objects/entities visible in the image
 - ocr_text: Any readable text visible in the image
 - image_type: Classification (photo, diagram, screenshot, or chart)
+- summary: A brief overall summary of the image
+- summary_short: A one-sentence summary (≤20 words)
+- summary_medium: A 2-3 sentence summary
+- summary_long: A comprehensive summary (4-6 sentences)
+- keywords: List of key subjects or themes (5-10 items)
 
 {context}
 

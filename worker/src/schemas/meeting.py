@@ -38,6 +38,11 @@ Provide:
 - decisions: List of decisions made in the meeting
 - action_items: List of action items with task, assignee, and deadline (if mentioned)
 - topic_segments: List of topics discussed with a summary for each
+- summary: A brief overall summary of the meeting
+- summary_short: A one-sentence summary (≤20 words)
+- summary_medium: A 2-3 sentence summary
+- summary_long: A comprehensive summary (4-6 sentences)
+- keywords: List of key topics or themes (5-10 items)
 
 Meeting notes:
 {text}

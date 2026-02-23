@@ -127,7 +127,10 @@ def test_get_adapter_ollama():
 
 def test_get_adapter_openai():
     """Test adapter factory returns OpenAIAdapter when configured."""
-    with patch("src.adapters.EXTRACTOR_PROVIDER", "openai"):
+    with (
+        patch("src.adapters.EXTRACTOR_PROVIDER", "openai"),
+        patch("src.adapters.openai.OPENAI_API_KEY", "sk-test"),
+    ):
         adapter = get_adapter()
         assert isinstance(adapter, OpenAIAdapter)
         assert not isinstance(adapter, OllamaAdapter)
@@ -136,7 +139,7 @@ def test_get_adapter_openai():
 @pytest.mark.asyncio
 async def test_openai_adapter_json_mode_fallback():
     """Test OpenAI adapter falls back to non-JSON mode when JSON mode fails."""
-    adapter = OpenAIAdapter()
+    adapter = OpenAIAdapter(base_url="http://localhost:11434/v1")
 
     fallback_response = _make_openai_response('{"summary": "fallback result"}')
 
@@ -221,14 +224,14 @@ def test_ollama_adapter_uses_ollama_api_key():
 
 def test_openai_adapter_parse_json_content_direct():
     """Test _parse_json_content with valid JSON string."""
-    adapter = OpenAIAdapter()
+    adapter = OpenAIAdapter(base_url="http://localhost:11434/v1")
     result = adapter._parse_json_content('{"key": "value"}')
     assert result == {"key": "value"}
 
 
 def test_openai_adapter_parse_json_content_fenced():
     """Test _parse_json_content with fenced markdown block."""
-    adapter = OpenAIAdapter()
+    adapter = OpenAIAdapter(base_url="http://localhost:11434/v1")
     content = '```json\n{"key": "value"}\n```'
     result = adapter._parse_json_content(content)
     assert result == {"key": "value"}
@@ -236,7 +239,7 @@ def test_openai_adapter_parse_json_content_fenced():
 
 def test_openai_adapter_parse_json_content_substring():
     """Test _parse_json_content extracts JSON substring."""
-    adapter = OpenAIAdapter()
+    adapter = OpenAIAdapter(base_url="http://localhost:11434/v1")
     content = 'Here is the result: {"key": "value"} - done'
     result = adapter._parse_json_content(content)
     assert result == {"key": "value"}
@@ -244,13 +247,29 @@ def test_openai_adapter_parse_json_content_substring():
 
 def test_openai_adapter_parse_json_content_none():
     """Test _parse_json_content returns None for unparseable content."""
-    adapter = OpenAIAdapter()
+    adapter = OpenAIAdapter(base_url="http://localhost:11434/v1")
     result = adapter._parse_json_content("not json at all")
     assert result is None
 
 
 def test_openai_adapter_parse_json_content_empty():
     """Test _parse_json_content returns None for empty/None content."""
-    adapter = OpenAIAdapter()
+    adapter = OpenAIAdapter(base_url="http://localhost:11434/v1")
     assert adapter._parse_json_content(None) is None
     assert adapter._parse_json_content("") is None
+
+
+def test_openai_adapter_fails_fast_without_api_key():
+    """Test OpenAIAdapter raises ValueError when using real OpenAI without a key."""
+    with (
+        patch("src.adapters.openai.OPENAI_BASE_URL", "https://api.openai.com/v1"),
+        patch("src.adapters.openai.OPENAI_API_KEY", ""),
+    ):
+        with pytest.raises(ValueError, match="OPENAI_API_KEY is required"):
+            OpenAIAdapter()
+
+
+def test_openai_adapter_no_fail_fast_with_local_url():
+    """Test OpenAIAdapter does NOT raise when using a local/custom base_url without a key."""
+    adapter = OpenAIAdapter(base_url="http://localhost:11434/v1")
+    assert adapter is not None

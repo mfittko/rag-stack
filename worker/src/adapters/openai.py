@@ -23,9 +23,23 @@ class OpenAIAdapter(ExtractorAdapter):
     def __init__(self, base_url: str | None = None, api_key: str | None = None):
         from openai import AsyncOpenAI
 
+        resolved_base_url = base_url or OPENAI_BASE_URL
+        resolved_api_key = api_key or OPENAI_API_KEY or "not-required"
+
+        # Fail fast when pointing at the real OpenAI API without a key
+        _openai_default = "https://api.openai.com/v1"
+        if resolved_base_url.rstrip("/") == _openai_default.rstrip("/") and not (
+            api_key or OPENAI_API_KEY
+        ):
+            raise ValueError(
+                "OPENAI_API_KEY is required when using the OpenAI API "
+                "(OPENAI_BASE_URL is set to the default https://api.openai.com/v1). "
+                "Set OPENAI_API_KEY or configure a local OPENAI_BASE_URL."
+            )
+
         self.client = AsyncOpenAI(
-            base_url=base_url or OPENAI_BASE_URL,
-            api_key=api_key or OPENAI_API_KEY or "not-required",
+            base_url=resolved_base_url,
+            api_key=resolved_api_key,
         )
         self.fast_model = EXTRACTOR_MODEL_FAST
         self.capable_model = EXTRACTOR_MODEL_CAPABLE
@@ -138,7 +152,7 @@ Respond in JSON format."""
             )
             content = response.choices[0].message.content
             result = self._parse_json_content(content)
-            if result is not None:
+            if isinstance(result, dict):
                 return ImageDescription(**result)
         except Exception as e:
             logger.warning(
@@ -154,7 +168,7 @@ Respond in JSON format."""
             )
             content = response.choices[0].message.content
             result = self._parse_json_content(content)
-            if result is not None:
+            if isinstance(result, dict):
                 return ImageDescription(**result)
         except Exception as e:
             logger.error(f"Error in image description (fallback): {e}")
@@ -194,7 +208,7 @@ Respond in JSON format."""
             )
             content = response.choices[0].message.content
             result = self._parse_json_content(content)
-            if result is not None:
+            if isinstance(result, dict):
                 return result
         except Exception as e:
             logger.warning(f"JSON mode extraction failed ({e}); retrying without response_format")
@@ -217,7 +231,7 @@ Respond in JSON format."""
             )
             content = response.choices[0].message.content
             result = self._parse_json_content(content)
-            if result is not None:
+            if isinstance(result, dict):
                 return result
         except Exception as e:
             logger.error(f"Error in structured extraction (fallback): {e}")

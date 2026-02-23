@@ -31,6 +31,10 @@ Provide:
 - intent: Main intent (request, fyi, approval, or escalation)
 - action_items: List of action items mentioned with task and assignee if specified
 - summary: A brief summary of the email
+- summary_short: A one-sentence summary (≤20 words)
+- summary_medium: A 2-3 sentence summary
+- summary_long: A comprehensive summary (4-6 sentences)
+- keywords: List of key topics or concepts (5-10 items)
 
 Email:
 {text}

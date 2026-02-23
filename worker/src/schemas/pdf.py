@@ -55,8 +55,14 @@ PROMPT = """Analyze this PDF document and extract metadata.
 
 Provide:
 - summary: An overall summary of the document
+- summary_short: A one-sentence summary (≤20 words)
+- summary_medium: A 2-3 sentence summary
+- summary_long: A comprehensive summary (4-6 sentences)
+- keywords: List of key topics or concepts (5-10 items)
 - key_entities: List of key entities, names, or concepts mentioned
 - sections: List of major sections with title and summary
+- invoice: Invoice metadata (set is_invoice to true if this is an invoice,
+  and populate all relevant fields including sender, receiver, dates, amounts, and line_items)
 
 PDF content:
 {text}
