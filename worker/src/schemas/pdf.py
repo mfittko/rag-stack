@@ -61,8 +61,12 @@ Provide:
 - keywords: List of key topics or concepts (5-10 items)
 - key_entities: List of key entities, names, or concepts mentioned
 - sections: List of major sections with title and summary
-- invoice: Invoice metadata (set is_invoice to true if this is an invoice,
-  and populate all relevant fields including sender, receiver, dates, amounts, and line_items)
+- invoice: Invoice metadata object; if this is an invoice set is_invoice to true and populate:
+  - sender, receiver: parties involved
+  - invoice_number, invoice_identifier: identifier(s) for the invoice
+  - invoice_date, due_date: relevant dates (ISO 8601 format)
+  - currency, subtotal, vat_amount, total_amount: financial totals
+  - line_items: list with description, quantity, unit_price, amount, vat_rate per item
 
 PDF content:
 {text}
