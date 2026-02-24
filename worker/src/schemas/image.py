@@ -6,10 +6,15 @@ from pydantic import BaseModel, Field
 class ImageMetadata(BaseModel):
     """Metadata extracted from images."""
 
-    description: str
+    description: str = ""
     detected_objects: list[str] = Field(default_factory=list)
     ocr_text: str = ""
-    image_type: str  # photo, diagram, screenshot, chart
+    image_type: str = ""  # photo, diagram, screenshot, chart
+    summary: str = ""
+    summary_short: str = ""
+    summary_medium: str = ""
+    summary_long: str = ""
+    keywords: list[str] = Field(default_factory=list)
 
 
 # Prompt template for image metadata extraction
@@ -20,6 +25,11 @@ Provide:
 - detected_objects: List of main objects/entities visible in the image
 - ocr_text: Any readable text visible in the image
 - image_type: Classification (photo, diagram, screenshot, or chart)
+- summary: A brief overall summary of the image
+- summary_short: A one-sentence summary (≤20 words)
+- summary_medium: A 2-3 sentence summary
+- summary_long: A comprehensive summary (4-6 sentences)
+- keywords: List of key subjects or themes (5-10 items)
 
 {context}
 

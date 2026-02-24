@@ -14,6 +14,72 @@ logger = logging.getLogger(__name__)
 adapter = get_adapter()
 
 
+def _normalize_tier3_metadata(tier3_meta: dict) -> dict:
+    """Normalize tier-3 metadata: summaries, invoice, and keywords.
+
+    Args:
+        tier3_meta: Raw metadata dict from the LLM adapter
+
+    Returns:
+        Normalized metadata dict
+    """
+    # --- Summary normalization with cascading fallback ---
+    s_short = tier3_meta.get("summary_short") or ""
+    s_medium = tier3_meta.get("summary_medium") or ""
+    s_long = tier3_meta.get("summary_long") or ""
+    s_legacy = tier3_meta.get("summary") or ""
+
+    # Populate missing levels using cascading fallback
+    if not s_long:
+        s_long = s_medium or s_short or s_legacy
+    if not s_medium:
+        s_medium = s_long or s_short or s_legacy
+    if not s_short:
+        s_short = s_medium or s_long or s_legacy
+
+    tier3_meta["summary_short"] = s_short
+    tier3_meta["summary_medium"] = s_medium
+    tier3_meta["summary_long"] = s_long
+    # Keep backward-compatible summary field only when we have non-empty summaries
+    if not s_legacy and (s_short or s_medium or s_long):
+        tier3_meta["summary"] = s_medium
+
+    # --- Invoice normalization ---
+    invoice = tier3_meta.get("invoice")
+    if isinstance(invoice, dict) and invoice.get("is_invoice"):
+        # Bidirectional sync: invoice_number ↔ invoice_identifier
+        inv_number = invoice.get("invoice_number") or ""
+        inv_identifier = invoice.get("invoice_identifier") or ""
+        if inv_number and not inv_identifier:
+            invoice["invoice_identifier"] = inv_number
+        elif inv_identifier and not inv_number:
+            invoice["invoice_number"] = inv_identifier
+
+        inv_date = invoice.get("invoice_date") or ""
+        final_identifier = invoice.get("invoice_identifier") or invoice.get("invoice_number") or ""
+
+        # Append invoice date and identifier to summaries if not already present
+        for key in ("summary_short", "summary_medium", "summary_long", "summary"):
+            val = tier3_meta.get(key) or ""
+            if not val:
+                continue
+            new_val = val
+            if inv_date and inv_date not in new_val:
+                new_val = f"{new_val} ({inv_date})"
+            if final_identifier and final_identifier not in new_val:
+                new_val = f"{new_val} [{final_identifier}]"
+            tier3_meta[key] = new_val
+
+    # --- Keywords normalization ---
+    keywords = tier3_meta.get("keywords")
+    if not keywords:
+        keywords = tier3_meta.get("key_entities") or []
+    if isinstance(keywords, list):
+        tier3_meta["keywords"] = [k.strip() for k in keywords if isinstance(k, str) and k.strip()]
+
+    return tier3_meta
+
+
 async def process_task(task: dict) -> None:
     """Process a single enrichment task through the full pipeline.
 
@@ -163,12 +229,13 @@ async def run_document_level_extraction(
         tier3_meta = await adapter.extract_metadata(
             full_text, doc_type, schema_dict, prompt_template
         )
+        tier3_meta = _normalize_tier3_metadata(tier3_meta)
 
         # Entity + relationship extraction
         entity_result = await adapter.extract_entities(full_text)
 
-        # Extract summary
-        summary = tier3_meta.get("summary", "")
+        # Extract summary (prefer summary_medium for downstream use)
+        summary = str(tier3_meta.get("summary_medium") or tier3_meta.get("summary") or "")
 
         # Format entities for API
         entities = []

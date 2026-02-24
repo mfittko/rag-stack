@@ -6,6 +6,19 @@ The format is based on [Common Changelog](https://common-changelog.org/).
 
 ---
 
+## February 24, 2026
+
+### Added
+
+- **Auto Provider Selection** ([#104](https://github.com/mfittko/RAGed/pull/104)): Adds `resolve_extractor_provider()` plus new env vars and model defaults to auto-detect OpenAI/Anthropic/Ollama based on available credentials while still allowing explicit overrides, preventing invalid configs from silently mis-selecting providers.
+
+### Changed
+
+- **Robust OpenAI/Ollama Adapters** ([#104](https://github.com/mfittko/RAGed/pull/104)): Updates the OpenAI adapter to accept base URL/API key overrides, fail fast on missing keys for public endpoints, and improve JSON extraction/fallback logic while keeping civic vision token limits, then rewrites the Ollama adapter as a thin OpenAI-compatible wrapper that normalizes its `/v1` endpoint.
+- **Expanded Schema Summaries & Invoices** ([#104](https://github.com/mfittko/RAGed/pull/104)): Enriches all eight content schemas with short/medium/long summaries, keywords, and consistent default strings while adding structured invoice metadata/line items to PDFs so prompts explicitly request these fields for more reliable downstream data.
+- **Tier3 Metadata Normalization** ([#104](https://github.com/mfittko/RAGed/pull/104)): Introduces `_normalize_tier3_metadata()` to post-process LLM output before storage, improving consistency of the metadata that feeds the rest of the pipeline.
+
+
 
 ## February 19, 2026
 

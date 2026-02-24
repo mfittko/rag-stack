@@ -70,6 +70,9 @@ def extract_keywords(text: str, top_n: int = 10) -> list[str]:
 
     # Extract top phrases
     phrases = []
+    if not doc.has_extension("phrases"):
+        logger.debug("spaCy Doc extension 'phrases' is not registered; returning no keywords")
+        return phrases
     for phrase in doc._.phrases[:top_n]:
         phrases.append(phrase.text)
 
@@ -130,6 +133,9 @@ def process_text_nlp(text: str) -> dict:
 
     # Extract keywords from TextRank
     keywords = []
+    if not doc.has_extension("phrases"):
+        logger.debug("spaCy Doc extension 'phrases' is not registered; returning no keywords")
+        return {"entities": entities, "keywords": keywords}
     for phrase in doc._.phrases[:10]:  # Top 10 keywords
         keywords.append(phrase.text)
 
