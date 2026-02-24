@@ -12,8 +12,7 @@ metadata:
     emoji: "magnifying_glass"
     requires:
       bins:
-        - node
-        - npm
+        - raged
       env:
         - RAGED_URL
     primaryEnv: RAGED_URL
@@ -29,7 +28,7 @@ Store any content and retrieve it via natural-language queries, enriched with me
 
 raged supports multiple providers: embeddings can run via Ollama or OpenAI, and enrichment summarization/entity extraction can run via Ollama, OpenAI, or Anthropic. It stores vectors and serves similarity search with optional async enrichment.
 
-Graph expansion in query has been removed. Relationship features are transitioning to Apache AGE on Postgres (https://age.apache.org/).
+`graphExpand` is currently supported in query responses; graph storage/traversal is planned to transition to Apache AGE on Postgres (https://age.apache.org/).
 
 Use the CLI as the primary interface. Do not call raw API endpoints directly in normal skill usage.
 
@@ -44,16 +43,16 @@ Content types: source code, markdown docs, blog articles, email threads, PDFs, i
 
 ## Pre-flight: Check Connection
 
-Before running queries or indexing, verify raged is reachable using the bundled checker script:
+Before running queries or indexing, verify raged is reachable with a lightweight CLI call:
 
 ```bash
-node scripts/check-connection.mjs "$RAGED_URL"
+raged query --q "health check" --topK 1 --api "$RAGED_URL"
 ```
 
 If the health check fails, remind the user to start the stack:
 
 ```bash
-docker compose up -d   # base stack (Qdrant, Ollama, API)
+docker compose up -d   # base stack (Postgres, Ollama, API)
 docker compose --profile enrichment up -d   # full stack with enrichment worker
 ```
 
@@ -68,9 +67,7 @@ Provider notes:
 ### Basic Query
 
 ```bash
-cd cli && npm install && npm run build
-
-node dist/index.js query \
+raged query \
   --q "authentication middleware" \
   --topK 5 \
   --api "$RAGED_URL" \
@@ -82,8 +79,8 @@ Omit `--token` if raged auth is disabled.
 Works for any content type — code, docs, articles, transcripts:
 
 ```bash
-node dist/index.js query --q "Q1 roadmap decisions" --topK 5 --api "$RAGED_URL"
-node dist/index.js query --q "React server components best practices" --topK 5 --api "$RAGED_URL"
+raged query --q "Q1 roadmap decisions" --topK 5 --api "$RAGED_URL"
+raged query --q "React server components best practices" --topK 5 --api "$RAGED_URL"
 ```
 
 ### Query with Filters
@@ -91,7 +88,7 @@ node dist/index.js query --q "React server components best practices" --topK 5 -
 Filter by repo, language, and path prefix:
 
 ```bash
-node dist/index.js query \
+raged query \
   --q "route handler" \
   --topK 8 \
   --repoId "my-repo" \
@@ -104,7 +101,7 @@ node dist/index.js query \
 ### Query with Summaries and Keywords
 
 ```bash
-node dist/index.js query \
+raged query \
   --q "authentication flow" \
   --summary medium \
   --keywords \
@@ -119,7 +116,7 @@ node dist/index.js query \
 |-------|------|---------|-------------|
 | `--q` | string | **required** | Natural-language search text |
 | `--topK` | number | `8` | Number of results to return |
-| `--collection` | string | `docs` | Search a single collection |
+| `--collection` | string | _(none)_ | Search a single collection |
 | `--collections` | string | _(none)_ | Comma-separated collection names |
 | `--allCollections` | flag | `false` | Search all discovered collections |
 | `--repoId` | string | _(none)_ | Filter by repository ID |
@@ -137,9 +134,7 @@ Ingest any text into the knowledge base. raged chunks it, embeds each chunk, and
 For indexing entire Git repositories, the CLI automates cloning, scanning, batching, and filtering. From the raged repo:
 
 ```bash
-cd cli && npm install && npm run build
-
-node dist/index.js index \
+raged index \
   --repo https://github.com/org/repo.git \
   --api "$RAGED_URL" \
   --token "$RAGED_TOKEN" \
@@ -152,7 +147,7 @@ node dist/index.js index \
 |------|------|---------|-------------|
 | `--repo`, `-r` | string | **required** | Git URL to clone |
 | `--api` | string | `http://localhost:8080` | raged API URL |
-| `--collection` | string | `docs` | Target Qdrant collection |
+| `--collection` | string | `docs` | Target collection |
 | `--branch` | string | _(default)_ | Branch to clone |
 | `--repoId` | string | _(repo URL)_ | Stable identifier for the repo |
 | `--token` | string | _(from env)_ | Bearer token |
@@ -170,21 +165,21 @@ For ingesting PDFs, images, Slack exports, or other non-repo content:
 
 ```bash
 # Ingest a single PDF
-node dist/index.js ingest \
+raged ingest \
   --file path/to/document.pdf \
   --api "$RAGED_URL" \
   --token "$RAGED_TOKEN" \
   --collection docs
 
 # Ingest all files in a directory
-node dist/index.js ingest \
+raged ingest \
   --dir path/to/content/ \
   --api "$RAGED_URL" \
   --token "$RAGED_TOKEN" \
   --collection docs
 
 # Ingest a URL
-node dist/index.js ingest \
+raged ingest \
   --url "https://example.com/post" \
   --api "$RAGED_URL" \
   --token "$RAGED_TOKEN" \
@@ -205,7 +200,7 @@ When enrichment is enabled (worker running), raged performs async metadata extra
 
 ```bash
 # System-wide enrichment statistics (without enqueue)
-node dist/index.js enrich --stats \
+raged enrich --stats \
   --api "$RAGED_URL" \
   --token "$RAGED_TOKEN"
 ```
@@ -214,17 +209,17 @@ node dist/index.js enrich --stats \
 
 ```bash
 # Trigger enrichment for pending items
-node dist/index.js enrich \
+raged enrich \
   --api "$RAGED_URL" \
   --token "$RAGED_TOKEN"
 
 # Force re-enrichment
-node dist/index.js enrich --force \
+raged enrich --force \
   --api "$RAGED_URL" \
   --token "$RAGED_TOKEN"
 
 # Re-enrich subset using text filter
-node dist/index.js enrich --force --filter "auth" \
+raged enrich --force --filter "auth" \
   --api "$RAGED_URL" \
   --token "$RAGED_TOKEN"
 ```
@@ -236,7 +231,7 @@ Relationship lookup is in transition while graph capabilities move to a PostgreS
 ### Query Entity
 
 ```bash
-node dist/index.js graph --entity "AuthService" \
+raged graph --entity "AuthService" \
   --api "$RAGED_URL" \
   --token "$RAGED_TOKEN"
 ```
