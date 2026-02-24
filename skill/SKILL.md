@@ -43,10 +43,10 @@ Content types: source code, markdown docs, blog articles, email threads, PDFs, i
 
 ## Pre-flight: Check Connection
 
-Before running queries or indexing, verify raged is reachable with a lightweight CLI call:
+Before running queries or indexing, verify raged is reachable with a lightweight API reachability check:
 
 ```bash
-raged query --q "health check" --topK 1 --api "$RAGED_URL"
+raged collections --api "$RAGED_URL"
 ```
 
 If the health check fails, remind the user to start the stack:

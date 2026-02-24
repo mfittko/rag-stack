@@ -77,7 +77,7 @@ sequenceDiagram
 
     U->>OC: "Find docs about deployment strategy"
     OC->>S: Activate skill
-  S->>CLI: node dist/index.js query --q "deployment strategy"
+  S->>CLI: raged query --q "deployment strategy"
   CLI->>API: POST /query
   API-->>CLI: Relevant chunks
     S-->>OC: Results formatted

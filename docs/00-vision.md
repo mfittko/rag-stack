@@ -68,8 +68,8 @@ What exists:
 - ✅ **Postgres-backed storage:** Entity and relationship storage with indexed lookups
 - ✅ **Entity extraction:** NER via spaCy (tier-2) and LLM-based extraction (tier-3)
 - ✅ **Relationship extraction:** Automatic discovery of entity relationships
-- ⚠️ **Graph expansion transition:** `graphExpand` query expansion has been removed
-- ⚠️ **Graph API transition:** Graph lookup endpoints are being aligned with Apache AGE on Postgres (https://age.apache.org/)
+- ⚠️ **Graph expansion transition:** `graphExpand` query expansion is currently available but experimental and will transition to Apache AGE-backed graph queries; API details may change
+- ⚠️ **Graph API transition:** Graph lookup endpoints are being aligned with Apache AGE on Postgres (https://age.apache.org/) and may be feature-gated in some deployments
 - ✅ **Document linking:** Track which documents mention which entities
 
 **API endpoints:**
