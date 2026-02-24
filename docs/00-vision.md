@@ -1,12 +1,12 @@
 # Vision
 
-raged is a multi-agent memory hub: a shared retrieval-augmented generation (RAG) layer with enrichment and knowledge graph capabilities.
+raged is a multi-agent memory hub: a shared retrieval-augmented generation (RAG) layer with enrichment and entity relationship capabilities.
 
 ## Why
 
 AI agents work best with relevant context, but stuffing entire knowledge bases into a model's context window is wasteful and expensive. raged keeps the heavy retrieval work outside the model loop: ingest once, query many times, return only what's relevant.
 
-Vector search alone finds *semantically similar* content. But real knowledge has structure — docs reference code, emails discuss designs, repos depend on libraries. The knowledge graph captures these relationships, enabling retrieval that follows connections, not just similarity. The combination is more powerful than either alone:
+Vector search alone finds *semantically similar* content. But real knowledge has structure — docs reference code, emails discuss designs, repos depend on libraries. raged tracks these relationships to enrich retrieval beyond pure similarity.
 
 | Query type | Vector DB | + Graph DB |
 |-----------|----------|------------|
@@ -53,7 +53,7 @@ What exists:
 - In-cluster indexing Job
 - Agent integrations: Claude Code skill, OpenClaw AgentSkill
 
-### v1.0 — Enrichment & Knowledge Graph ✅ (completed)
+### v1.0 — Enrichment & Relationship Layer ✅ (completed)
 
 **Metadata extraction pipeline:**
 - ✅ **Tiered extraction:** tier-1 (sync, heuristic/AST/EXIF) → tier-2 (async, spaCy NLP) → tier-3 (async, LLM)
@@ -64,12 +64,12 @@ What exists:
 - ✅ **Retry logic:** Exponential backoff with dead-letter queue for failed tasks
 - ✅ **Status tracking:** Per-document enrichment status via `/enrichment/status/:baseId`
 
-**Knowledge graph:**
-- ✅ **Postgres graph storage:** Entity and relationship storage with indexed lookups
+**Relationship layer:**
+- ✅ **Postgres-backed storage:** Entity and relationship storage with indexed lookups
 - ✅ **Entity extraction:** NER via spaCy (tier-2) and LLM-based extraction (tier-3)
 - ✅ **Relationship extraction:** Automatic discovery of entity relationships
-- ✅ **Hybrid retrieval:** Vector search + graph expansion via `graphExpand` parameter
-- ✅ **Graph queries:** Direct entity lookup via `/graph/entity/:name`
+- ⚠️ **Graph expansion transition:** `graphExpand` query expansion has been removed
+- ⚠️ **Graph API transition:** Graph lookup endpoints are being aligned with Apache AGE on Postgres (https://age.apache.org/)
 - ✅ **Document linking:** Track which documents mention which entities
 
 **API endpoints:**
@@ -81,7 +81,7 @@ What exists:
 **CLI enhancements:**
 - ✅ `raged ingest` — Ingest arbitrary files (PDFs, images, Slack exports)
 - ✅ `raged enrich` — Trigger and monitor enrichment with `--force` and `--stats` flags
-- ✅ `raged graph` — Query knowledge graph entities
+- ✅ `raged graph` — Query relationship entities (transitioning)
 - ✅ `--no-enrich` / `--doc-type` flags on ingest commands (enrichment is on by default when enabled server-side)
 
 **Infrastructure:**

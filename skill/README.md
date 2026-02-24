@@ -44,7 +44,9 @@ Set `RAGED_TOKEN` only if your raged instance has `RAGED_API_TOKEN` configured.
 
 1. A running raged instance: `docker compose up -d` (from the raged repo)
 2. `node` and `npm` on PATH
-3. The Ollama embedding model pulled: `curl http://localhost:11434/api/pull -d '{"name":"nomic-embed-text"}'`
+3. Configure one of the supported provider setups:
+  - **Ollama (default local):** pull embedding model `curl http://localhost:11434/api/pull -d '{"name":"nomic-embed-text"}'`
+  - **OpenAI:** set API env vars (for embeddings and/or enrichment summarization), for example `OPENAI_API_KEY`, plus `EMBED_PROVIDER=openai` and/or `EXTRACTOR_PROVIDER=openai`
 
 ## Verify
 

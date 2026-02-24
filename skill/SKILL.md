@@ -1,7 +1,7 @@
 ---
 name: raged
 description: >
-  Store and retrieve knowledge using raged semantic search with enrichment and knowledge graph.
+  Store and retrieve knowledge using raged semantic search with enrichment and entity relationships.
   Use the raged CLI for all interactions (query, ingest, index, enrich, graph).
   Ingest any content — code, docs, PDFs, images, articles, emails, transcripts, notes — and query
   by natural language with grounded retrieval.
@@ -23,11 +23,13 @@ metadata:
         secret: true
 ---
 
-# raged — Semantic Knowledge Base with Enrichment & Graph
+# raged — Semantic Knowledge Base with Enrichment
 
-Store any content and retrieve it via natural-language queries, enriched with metadata extraction and knowledge graph relationships.
+Store any content and retrieve it via natural-language queries, enriched with metadata extraction and entity relationships.
 
-raged chunks text, embeds it with a local model (Ollama + nomic-embed-text), stores vectors, and serves similarity search. Optionally runs async enrichment (NLP + LLM extraction) and builds a Neo4j knowledge graph for entity-aware retrieval.
+raged supports multiple providers: embeddings can run via Ollama or OpenAI, and enrichment summarization/entity extraction can run via Ollama, OpenAI, or Anthropic. It stores vectors and serves similarity search with optional async enrichment.
+
+Graph expansion in query has been removed. Relationship features are transitioning to Apache AGE on Postgres (https://age.apache.org/).
 
 Use the CLI as the primary interface. Do not call raw API endpoints directly in normal skill usage.
 
@@ -52,8 +54,14 @@ If the health check fails, remind the user to start the stack:
 
 ```bash
 docker compose up -d   # base stack (Qdrant, Ollama, API)
-docker compose --profile enrichment up -d   # full stack with Redis, Neo4j, worker
+docker compose --profile enrichment up -d   # full stack with enrichment worker
 ```
+
+Provider notes:
+
+- Local default: Ollama for embeddings + enrichment models.
+- OpenAI embeddings: set `EMBED_PROVIDER=openai` and `OPENAI_API_KEY` (optionally `OPENAI_BASE_URL`, `OPENAI_EMBEDDING_MODEL`).
+- OpenAI summarization/extraction: set `EXTRACTOR_PROVIDER=openai` and `OPENAI_API_KEY`.
 
 ## Querying the Knowledge Base
 
@@ -122,7 +130,7 @@ node dist/index.js query \
 
 ## Ingesting Content
 
-Ingest any text into the knowledge base. raged chunks it, embeds each chunk, and stores vectors in Qdrant.
+Ingest any text into the knowledge base. raged chunks it, embeds each chunk, and stores vectors in Postgres.
 
 ### CLI: Bulk Git Repository Indexing
 
@@ -187,7 +195,7 @@ Supported file types: text, code, PDFs (extracted text), images (base64 + EXIF m
 
 ## Enrichment
 
-When enrichment is enabled (Redis + Neo4j + worker running), raged performs async metadata extraction:
+When enrichment is enabled (worker running), raged performs async metadata extraction:
 
 - **Tier-1** (sync): Heuristic/AST/EXIF extraction during ingest
 - **Tier-2** (async): spaCy NER, keyword extraction, language detection
@@ -221,9 +229,9 @@ node dist/index.js enrich --force --filter "auth" \
   --token "$RAGED_TOKEN"
 ```
 
-## Knowledge Graph
+## Entity Relationship Lookup
 
-When Neo4j is enabled, raged builds a knowledge graph of entities and relationships extracted from documents.
+Relationship lookup is in transition while graph capabilities move to a PostgreSQL extension.
 
 ### Query Entity
 
@@ -256,4 +264,4 @@ Description: Handles user authentication
 | `401 Unauthorized` in CLI output | Token missing or invalid | Set `RAGED_TOKEN` or pass `--token` |
 | `Failed to fetch` / connection refused | Stack not running or wrong URL | Verify `RAGED_URL`; run `docker compose up -d` |
 | No/low-quality results | Missing ingestion or weak filters | Re-run `index`/`ingest`; adjust `--topK`, `--repoId`, `--pathPrefix` |
-| Graph command returns little data | Neo4j or enrichment not active | Start enrichment profile and run `enrich` |
+| Graph command returns little data | Relationship features are transitioning | Use semantic query/enrichment; expect graph behavior updates |
