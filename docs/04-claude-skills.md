@@ -72,12 +72,14 @@ sequenceDiagram
     participant U as User
     participant OC as OpenClaw
     participant S as raged Skill
-    participant API as RAG API
+  participant CLI as raged CLI
+  participant API as RAG API
 
     U->>OC: "Find docs about deployment strategy"
     OC->>S: Activate skill
-    S->>API: POST /query (via curl)
-    API-->>S: Relevant chunks
+  S->>CLI: raged query --q "deployment strategy"
+  CLI->>API: POST /query
+  API-->>CLI: Relevant chunks
     S-->>OC: Results formatted
     OC-->>U: Grounded answer with sources
 ```
@@ -116,7 +118,7 @@ Configure in `~/.openclaw/openclaw.json`:
 
 ### Usage
 
-OpenClaw activates the skill based on the description in SKILL.md. The agent uses `curl` to call the raged API directly.
+OpenClaw activates the skill based on the description in `SKILL.md`. The skill uses the raged CLI as the primary interface.
 
 ## Other Agents
 
@@ -125,12 +127,6 @@ Any agent that can call HTTP or execute shell commands can use raged:
 ```bash
 # Via CLI
 raged query --api <url> --q "<question>" --topK 5
-
-# Via HTTP API
-curl -X POST https://rag.example.com/query \
-  -H "Content-Type: application/json" \
-  -H "Authorization: Bearer <token>" \
-  -d '{"query": "authentication flow", "topK": 5}'
 ```
 
 The v2.0 roadmap includes native SDK/client libraries for TypeScript, Python, and Go — eliminating the CLI dependency.

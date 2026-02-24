@@ -38,7 +38,7 @@ Stateless HTTP service exposing core endpoints:
 
 **Ingestion & Query:**
 - `POST /ingest` — Receives text items or URLs (code, docs, PDFs, images, web pages, etc.), optionally fetches URL content server-side with SSRF protection, runs tier-1 extraction, chunks, embeds via Ollama, upserts vectors into Postgres, optionally enqueues enrichment
-- `POST /query` — Embeds the query text, performs similarity search in Postgres using pgvector, supports adaptive/manual `minScore`, optional filters, and optional graph expansion
+- `POST /query` — Embeds the query text, performs similarity search in Postgres using pgvector, supports adaptive/manual `minScore`, optional filters, and optional `graphExpand` query-time expansion
 - `POST /query/download-first` — Runs query and returns the first match as a downloadable binary (from `raw_data` or blob store key)
 - `POST /query/fulltext-first` — Runs query and returns concatenated chunk text for the first matching document
 - `GET /collections` — Returns collection-level document/chunk/enrichment counts

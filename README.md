@@ -1,6 +1,6 @@
 # raged
 
-A vector-first knowledge base for AI agents — ingest any text (code, docs, articles, transcripts, notes), embed it locally, and retrieve relevant context via semantic search and knowledge graph traversal.
+A vector-first knowledge base for AI agents — ingest any text (code, docs, articles, transcripts, notes), embed it (Ollama or OpenAI), and retrieve relevant context via semantic search and entity-aware retrieval.
 
 ```mermaid
 graph LR
@@ -22,12 +22,12 @@ graph LR
 ## What It Does
 
 1. **Ingest** text or URLs — send content directly to the API via HTTP, fetch web pages/PDFs server-side, or use the CLI to bulk-index Git repositories
-2. **Embed** each chunk using a local model (Ollama + nomic-embed-text)
+2. **Embed** each chunk using Ollama (default local) or OpenAI
 3. **Store** embeddings in Postgres with pgvector
 4. **Query** by natural language — semantic similarity search for context-rich results
 5. **Download** first matched source as raw binary or reconstructed full text via dedicated query endpoints
 
-AI agents (Claude Code, OpenClaw, or any HTTP/CLI-capable agent) use this to retrieve grounded context without stuffing entire knowledge bases into their context window. Vector search finds *what's relevant*; entity relationships find *what's connected*.
+AI agents (Claude Code, OpenClaw, or any HTTP/CLI-capable agent) use this to retrieve grounded context without stuffing entire knowledge bases into their context window. Vector search finds *what's relevant*; entity metadata helps identify *what's connected*. Graph expansion is currently transitioning to Apache AGE on Postgres (https://age.apache.org/).
 
 ## Quickstart
 
@@ -105,7 +105,7 @@ node dist/index.js query \
 |-----------|------|------|
 | **RAGED API** | Chunk, embed, store, search, orchestrate enrichment | Fastify, Node.js |
 | **Postgres** | Vector storage (pgvector), entities, task queue | Postgres 17 + pgvector |
-| **Ollama** | Local embedding and LLM runtime | nomic-embed-text (768d), llama3, llava |
+| **Ollama / OpenAI** | Embedding + extraction providers | Ollama local models or OpenAI APIs |
 | **SeaweedFS** | Optional S3-compatible blob storage for large files | SeaweedFS 3.80 |
 | **Enrichment Worker** | Async metadata extraction *(optional)* | Python, spaCy, asyncio |
 | **CLI** | Bulk-index Git repos and query from terminal | Node.js, TypeScript |

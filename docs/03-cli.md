@@ -47,10 +47,20 @@ node dist/index.js query --q "<search text>" [options]
 
 | Flag | Default | Description |
 |------|---------|-------------|
-| `--q` / `--query` | _(required)_ | Search query text |
+| `--q` | _(required)_ | Search query text |
 | `--api` | `http://localhost:8080` | RAG API URL |
-| `--collection` | `docs` | Collection name |
+| `--collection` | _(none)_ | Single collection name |
+| `--collections` | _(none)_ | Comma-separated collection names |
+| `--allCollections` | `false` | Search all discovered collections |
 | `--topK` | `8` | Number of results to return |
+| `--minScore` | `auto` | Minimum similarity score cutoff (`0-1` or `auto`) |
+| `--summary` | _(none)_ | Show LLM summary (`short`, `medium`, `long`) |
+| `--keywords` | `false` | Show extracted keywords |
+| `--unique` | `false` | Deduplicate results by checksum |
+| `--full` | `false` | Download first match full extracted text |
+| `--stdout` | `false` | Print full text to stdout (with `--full`) |
+| `--download` | `false` | Download first result raw file |
+| `--open` | `false` | Open first result URL or downloaded file |
 | `--repoId` | _(none)_ | Filter by repository ID |
 | `--pathPrefix` | _(none)_ | Filter by file path prefix |
 | `--lang` | _(none)_ | Filter by language |
@@ -69,13 +79,21 @@ node dist/index.js ingest --dir <path> [options]
 |------|---------|-------------|
 | `--file` | - | Single file to ingest (mutually exclusive with --dir) |
 | `--dir` | - | Directory to ingest (mutually exclusive with --file) |
+| `--url` | - | Single URL to fetch and ingest |
 | `--api` | `http://localhost:8080` | RAG API URL |
 | `--collection` | `docs` | Collection name |
 | `--token` | _(env `RAGED_API_TOKEN`)_ | Bearer token for auth |
 | `--maxFiles` | `4000` | Maximum files to process from directory |
+| `--batchSize` | `10` | Number of files to ingest per batch |
+| `--ignore` | _(none)_ | Comma-separated ignore patterns |
+| `--ignore-file` | _(none)_ | File with ignore patterns (one per line) |
 | `--enrich` | `true` | Enable async enrichment |
 | `--no-enrich` | - | Disable async enrichment |
+| `--overwrite` | `false` | Overwrite existing docs for matching identity |
 | `--doc-type` | _(auto-detect)_ | Override document type (`code`, `text`, `pdf`, `image`, `slack`) |
+| `--urls-file` | _(none)_ | File containing URLs to ingest |
+| `--url-check` | `false` | Validate URL content before ingest (needs OpenAI key) |
+| `--url-check-model` | `gpt-4o-mini` | Model for URL content validation |
 
 **Supported file types:**
 - **Text/Code**: `.md`, `.txt`, `.ts`, `.js`, `.py`, `.go`, etc. — read as UTF-8
@@ -97,19 +115,21 @@ node dist/index.js enrich [options]
 | `--collection` | `docs` | Collection name |
 | `--token` | _(env `RAGED_API_TOKEN`)_ | Bearer token for auth |
 | `--force` | `false` | Re-enqueue all items (including already-enriched) |
-| `--stats-only` | `false` | Show enrichment stats without enqueueing |
+| `--stats` | `false` | Show enrichment stats without enqueueing |
+| `--filter` | _(none)_ | Full-text filter for selecting docs/chunks |
+| `--clear` | `false` | Clear queued enrichment tasks (optionally filtered) |
 
 **Behavior:**
 - Always shows enrichment statistics first
 - By default, enqueues pending items after showing stats
-- Use `--stats-only` to view stats without enqueueing
+- Use `--stats` to view stats without enqueueing
 - Use `--force` to re-enqueue all items (including already-enriched)
 
 **Examples:**
 
 ```bash
 # Show enrichment stats only (no enqueueing)
-node dist/index.js enrich --stats-only
+node dist/index.js enrich --stats
 
 # Show stats and enqueue pending items (default)
 node dist/index.js enrich
