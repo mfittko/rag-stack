@@ -6,16 +6,19 @@ The format is based on [Common Changelog](https://common-changelog.org/).
 
 ---
 
+
 ## February 25, 2026
 
 ### Added
 
+- **Metadata Filter DSL** ([#119](https://github.com/mfittko/RAGed/pull/119)): Adds a filter DSL to the metadata strategy engine so queries can express metadata constraints more precisely before the retrieval step.
+- **Metadata-Only Query Path** ([#119](https://github.com/mfittko/RAGed/pull/119)): Introduces a dedicated metadata-only query execution path that skips full retrieval when only metadata is required, improving efficiency.
+- **Temporal CLI Flags** ([#119](https://github.com/mfittko/RAGed/pull/119)): Adds temporal start/end options to the CLI query command to let users scope queries to a specific time window.
 - **Graph traversal strategy** ([#118](https://github.com/mfittko/RAGed/pull/118)): Introduces a GraphBackend abstraction, SqlGraphBackend implementation, and new strategy orchestration so POST /query executes RFC #114–aligned graph traversals with bounded depth, cycle detection, entity caps, deterministic deduplication, timeout handling, and consistent relationship filtering.
 
 ### Changed
 
 - **Graph API validation** ([#118](https://github.com/mfittko/RAGed/pull/118)): Adds graph request schemas, graphExpand compatibility, mutual exclusion handling, and entity resolution routing via the backend plus a case-insensitive entity name index migration to ensure the new strategy is surfaced safely.
-
 
 ## February 24, 2026
 
