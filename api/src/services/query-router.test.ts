@@ -85,11 +85,20 @@ describe("classifyQuery — rule engine", () => {
     expect(result.confidence).toBe(0.6);
   });
 
-  it("rule 7: relational pattern 'related to AuthService' → hybrid conf 0.6", async () => {
+  it("rule 7: relational pattern 'related to auth service' → hybrid conf 0.6", async () => {
     vi.stubEnv("ROUTER_LLM_ENABLED", "false");
-    const result = await classifyQuery({ query: "related to AuthService" });
+    const result = await classifyQuery({ query: "related to auth service" });
     expect(result.strategy).toBe("hybrid");
     expect(result.confidence).toBe(0.6);
+  });
+
+  it("rule 5 takes priority over rule 7 for mixed entity/relational queries", async () => {
+    vi.stubEnv("ROUTER_LLM_ENABLED", "false");
+    const result = await classifyQuery({
+      query: "who is AuthService related to BillingService",
+    });
+    expect(result.strategy).toBe("graph");
+    expect(result.rule).toBe("entity_pattern");
   });
 
   it("rule 8: empty query + filter → metadata conf 1.0", async () => {
@@ -360,6 +369,23 @@ describe("classifyQuery — circuit breaker", () => {
       await classifyQuery({ query: "who is AuthService" });
     }
     expect(_circuitBreaker.state).toBe("open");
+  });
+
+  it("opens after 5 invalid LLM payloads", async () => {
+    vi.stubEnv("ROUTER_LLM_ENABLED", "true");
+    vi.stubEnv("OLLAMA_URL", "http://localhost:11434");
+
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ response: "invalid response payload" }),
+    } as unknown as Response);
+    vi.stubGlobal("fetch", fetchMock);
+
+    for (let i = 0; i < 5; i++) {
+      await classifyQuery({ query: "who is AuthService" });
+    }
+    expect(_circuitBreaker.state).toBe("open");
+    expect(_circuitBreaker.failures).toBe(5);
   });
 
   it("skips LLM call when circuit is open", async () => {

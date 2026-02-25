@@ -196,11 +196,6 @@ function evaluateRules(req: RouterRequest): RuleMatch | null {
     return null;
   }
 
-  // Rule 7: relational pattern checked before entity (more specific signal)
-  if (RELATIONAL_PATTERN.test(query)) {
-    return { strategy: "hybrid", confidence: 0.6, rule: "relational_pattern" };
-  }
-
   // Rule 5: entity pattern → graph (conf 0.7)
   if (ENTITY_PATTERN.test(query)) {
     return { strategy: "graph", confidence: 0.7, rule: "entity_pattern" };
@@ -209,6 +204,11 @@ function evaluateRules(req: RouterRequest): RuleMatch | null {
   // Rule 6: filter-like pattern → metadata (conf 0.6)
   if (FILTER_LIKE_PATTERN.test(query)) {
     return { strategy: "metadata", confidence: 0.6, rule: "filter_like_pattern" };
+  }
+
+  // Rule 7: relational pattern → hybrid (conf 0.6)
+  if (RELATIONAL_PATTERN.test(query)) {
+    return { strategy: "hybrid", confidence: 0.6, rule: "relational_pattern" };
   }
 
   return null;
@@ -280,7 +280,11 @@ Query: "${query.replace(/"/g, '\\"')}"`;
         choices?: Array<{ message?: { content?: string } }>;
       };
       const content = json.choices?.[0]?.message?.content ?? "";
-      return parseClassificationResponse(content);
+      const parsed = parseClassificationResponse(content);
+      if (!parsed) {
+        recordLlmFailure();
+      }
+      return parsed;
     } else {
       // Default: Ollama /api/generate
       const model = getLlmModel();
@@ -295,7 +299,11 @@ Query: "${query.replace(/"/g, '\\"')}"`;
         throw new Error(`Ollama generate failed: ${response.status}`);
       }
       const json = (await response.json()) as { response?: string };
-      return parseClassificationResponse(json.response ?? "");
+      const parsed = parseClassificationResponse(json.response ?? "");
+      if (!parsed) {
+        recordLlmFailure();
+      }
+      return parsed;
     }
   } catch (err) {
     clearTimeout(timerId);

@@ -269,19 +269,27 @@ describe("ingest schema validation", () => {
 describe("query schema validation", () => {
   function buildApp() {
     const app = Fastify();
+    const hasFilterConditions = (filter: unknown): boolean => {
+      if (!filter || typeof filter !== "object" || Array.isArray(filter)) {
+        return false;
+      }
+      const obj = filter as Record<string, unknown>;
+      if (Array.isArray(obj.conditions) && obj.conditions.length > 0) return true;
+      if (Array.isArray(obj.must) && obj.must.length > 0) return true;
+      if (Array.isArray(obj.must_not) && obj.must_not.length > 0) return true;
+      if (Array.isArray(obj.should) && obj.should.length > 0) return true;
+      return false;
+    };
     app.post("/query", {
       schema: querySchema,
       preValidation: async (req, reply) => {
         const body = req.body as Record<string, unknown> | null;
         const hasQuery =
           typeof body?.query === "string" && body.query.trim().length > 0;
-        const hasFilter =
-          body?.filter !== undefined &&
-          body.filter !== null &&
-          typeof body.filter === "object";
+        const hasFilter = hasFilterConditions(body?.filter);
         if (!hasQuery && !hasFilter) {
           return reply.status(400).send({
-            error: "Request must include either a non-empty query or a filter",
+            error: "Request must include either a non-empty query or a filter with conditions",
           });
         }
       },
@@ -310,6 +318,28 @@ describe("query schema validation", () => {
       payload: { query: "" },
     });
     expect(res.statusCode).toBe(400);
+    await app.close();
+  });
+
+  it("rejects request with empty filter object and no query", async () => {
+    const app = buildApp();
+    const res = await app.inject({
+      method: "POST",
+      url: "/query",
+      payload: { filter: {} },
+    });
+    expect(res.statusCode).toBe(400);
+    await app.close();
+  });
+
+  it("accepts request with filter conditions and no query", async () => {
+    const app = buildApp();
+    const res = await app.inject({
+      method: "POST",
+      url: "/query",
+      payload: { filter: { must: [{ key: "lang", match: { value: "ts" } }] } },
+    });
+    expect(res.statusCode).toBe(200);
     await app.close();
   });
 
