@@ -230,6 +230,104 @@ describe("classifyQuery — LLM fallback", () => {
     const result = await classifyQuery({ query: "who is AuthService" });
     expect(result.method).toBe("rule_fallback");
   });
+
+  it("parses first complete JSON object when response contains nested braces", async () => {
+    vi.stubEnv("ROUTER_LLM_ENABLED", "true");
+    vi.stubEnv("OLLAMA_URL", "http://localhost:11434");
+
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        response:
+          'analysis {"strategy":"graph","confidence":0.9,"meta":{"source":"llm"}} trailing',
+      }),
+    } as unknown as Response);
+    vi.stubGlobal("fetch", fetchMock);
+
+    const result = await classifyQuery({ query: "who is AuthService" });
+    expect(result.method).toBe("llm");
+    expect(result.strategy).toBe("graph");
+    expect(result.confidence).toBe(0.9);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// OpenAI provider tests
+// ---------------------------------------------------------------------------
+
+describe("classifyQuery — OpenAI provider", () => {
+  it("handles missing OPENAI_API_KEY gracefully when EMBED_PROVIDER=openai", async () => {
+    vi.stubEnv("ROUTER_LLM_ENABLED", "true");
+    vi.stubEnv("EMBED_PROVIDER", "openai");
+    vi.stubEnv("OPENAI_API_KEY", "");
+
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+
+    const result = await classifyQuery({ query: "who is AuthService" });
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(result.method).toBe("rule_fallback");
+  });
+
+  it("uses ROUTER_LLM_MODEL when set for OpenAI chat completions", async () => {
+    vi.stubEnv("ROUTER_LLM_ENABLED", "true");
+    vi.stubEnv("EMBED_PROVIDER", "openai");
+    vi.stubEnv("OPENAI_API_KEY", "test-key");
+    vi.stubEnv("ROUTER_LLM_MODEL", "router-custom-model");
+    vi.stubEnv("OPENAI_CHAT_MODEL", "chat-fallback-model");
+
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        choices: [{ message: { content: '{"strategy":"graph","confidence":0.9}' } }],
+      }),
+    } as unknown as Response);
+    vi.stubGlobal("fetch", fetchMock);
+
+    await classifyQuery({ query: "who is AuthService" });
+    const firstCall = fetchMock.mock.calls[0] as [string, RequestInit];
+    const body = JSON.parse(String(firstCall[1].body)) as { model: string };
+    expect(body.model).toBe("router-custom-model");
+  });
+
+  it("uses OPENAI_CHAT_MODEL when ROUTER_LLM_MODEL is not set", async () => {
+    vi.stubEnv("ROUTER_LLM_ENABLED", "true");
+    vi.stubEnv("EMBED_PROVIDER", "openai");
+    vi.stubEnv("OPENAI_API_KEY", "test-key");
+    vi.stubEnv("OPENAI_CHAT_MODEL", "chat-fallback-model");
+
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        choices: [{ message: { content: '{"strategy":"graph","confidence":0.9}' } }],
+      }),
+    } as unknown as Response);
+    vi.stubGlobal("fetch", fetchMock);
+
+    await classifyQuery({ query: "who is AuthService" });
+    const firstCall = fetchMock.mock.calls[0] as [string, RequestInit];
+    const body = JSON.parse(String(firstCall[1].body)) as { model: string };
+    expect(body.model).toBe("chat-fallback-model");
+  });
+
+  it("falls back to gpt-4o-mini when no OpenAI router/chat model is set", async () => {
+    vi.stubEnv("ROUTER_LLM_ENABLED", "true");
+    vi.stubEnv("EMBED_PROVIDER", "openai");
+    vi.stubEnv("OPENAI_API_KEY", "test-key");
+
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        choices: [{ message: { content: '{"strategy":"graph","confidence":0.9}' } }],
+      }),
+    } as unknown as Response);
+    vi.stubGlobal("fetch", fetchMock);
+
+    await classifyQuery({ query: "who is AuthService" });
+    const firstCall = fetchMock.mock.calls[0] as [string, RequestInit];
+    const body = JSON.parse(String(firstCall[1].body)) as { model: string };
+    expect(body.model).toBe("gpt-4o-mini");
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -318,5 +416,24 @@ describe("classifyQuery — circuit breaker", () => {
     await classifyQuery({ query: "who is AuthService" });
     expect(_circuitBreaker.state).toBe("closed");
     expect(_circuitBreaker.failures).toBe(0);
+  });
+
+  it("resets cooldown timer when half-open probe fails", async () => {
+    vi.stubEnv("ROUTER_LLM_ENABLED", "true");
+    vi.stubEnv("OLLAMA_URL", "http://localhost:11434");
+    vi.stubEnv("ROUTER_LLM_CIRCUIT_BREAK_MS", "1");
+
+    const previousOpenedAt = Date.now() - 100;
+    _circuitBreaker.state = "open";
+    _circuitBreaker.failures = 5;
+    _circuitBreaker.openedAt = previousOpenedAt;
+
+    const fetchMock = vi.fn().mockRejectedValue(new Error("Probe failed"));
+    vi.stubGlobal("fetch", fetchMock);
+
+    await classifyQuery({ query: "who is AuthService" });
+    expect(_circuitBreaker.state).toBe("open");
+    expect(_circuitBreaker.openedAt).toBeTypeOf("number");
+    expect((_circuitBreaker.openedAt as number)).toBeGreaterThan(previousOpenedAt);
   });
 });

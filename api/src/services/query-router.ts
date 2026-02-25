@@ -122,6 +122,12 @@ function isCircuitOpen(): boolean {
 }
 
 function recordLlmFailure(): void {
+  if (_circuitBreaker.state === "half-open") {
+    _circuitBreaker.state = "open";
+    _circuitBreaker.openedAt = Date.now();
+    _circuitBreaker.failures = FAILURE_THRESHOLD;
+    return;
+  }
   _circuitBreaker.failures += 1;
   if (_circuitBreaker.failures >= FAILURE_THRESHOLD) {
     _circuitBreaker.state = "open";
@@ -302,10 +308,9 @@ function parseClassificationResponse(
   text: string,
 ): LlmClassification | null {
   try {
-    // Extract first JSON object from the response
-    const match = text.match(/\{[^}]*\}/);
-    if (!match) return null;
-    const parsed = JSON.parse(match[0]) as unknown;
+    const jsonText = extractFirstJsonObject(text);
+    if (!jsonText) return null;
+    const parsed = JSON.parse(jsonText) as unknown;
     if (typeof parsed !== "object" || parsed === null) return null;
     const obj = parsed as Record<string, unknown>;
     const strategy = obj["strategy"];
@@ -318,6 +323,49 @@ function parseClassificationResponse(
   } catch {
     return null;
   }
+}
+
+function extractFirstJsonObject(text: string): string | null {
+  const start = text.indexOf("{");
+  if (start === -1) return null;
+
+  let depth = 0;
+  let inString = false;
+  let escapeNext = false;
+
+  for (let index = start; index < text.length; index++) {
+    const char = text[index];
+
+    if (escapeNext) {
+      escapeNext = false;
+      continue;
+    }
+
+    if (char === "\\") {
+      escapeNext = true;
+      continue;
+    }
+
+    if (char === '"') {
+      inString = !inString;
+      continue;
+    }
+
+    if (inString) {
+      continue;
+    }
+
+    if (char === "{") {
+      depth += 1;
+    } else if (char === "}") {
+      depth -= 1;
+      if (depth === 0) {
+        return text.slice(start, index + 1);
+      }
+    }
+  }
+
+  return null;
 }
 
 // ---------------------------------------------------------------------------

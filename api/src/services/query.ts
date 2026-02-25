@@ -84,13 +84,17 @@ export async function query(
     return { ...metaResult, routing };
   }
 
+  const queryText = request.query?.trim() ?? "";
+  if (queryText.length === 0) {
+    throw new Error("Query text is required for semantic, graph, and hybrid strategies");
+  }
+
   // Hybrid stub — falls back to semantic until #110 lands
   // TODO(#110): implement hybrid result merging
   if (routing.strategy === "hybrid") {
     // fall through to semantic
   }
 
-  const queryText = request.query ?? "";
   const vectors = await embedTexts([queryText]);
   const [vector] = vectors;
   if (!vector) {
@@ -187,8 +191,9 @@ export async function query(
 
   let graphResult: GraphResult | undefined;
 
-  // Graph expansion: convert deprecated graphExpand to graph params
-  // Also used when routing strategy is "graph"
+  // Graph expansion: convert deprecated graphExpand to graph params.
+  // Intentional router behavior: classified "graph" strategy enables graph
+  // expansion with default params even without explicit graphExpand.
   const graphParams =
     routing.strategy === "graph"
       ? (request.graph ?? {})

@@ -227,6 +227,12 @@ describe("query service", () => {
     expect(result.results.length).toBe(0);
   });
 
+  it("throws when non-metadata strategy is selected with empty query", async () => {
+    await expect(query({ query: "" })).rejects.toThrow(
+      "Query text is required for semantic, graph, and hybrid strategies",
+    );
+  });
+
   it("applies translated filters with chunk table alias", async () => {
     const queryMock = vi.fn(async () => ({
       rows: [
