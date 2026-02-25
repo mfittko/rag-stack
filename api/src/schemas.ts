@@ -81,7 +81,10 @@ export const queryDownloadFirstSchema = {
     type: "object" as const,
     additionalProperties: false as const,
     required: ["query"],
-    properties: queryBodyProperties,
+    properties: {
+      ...queryBodyProperties,
+      query: { type: "string" as const, minLength: 1, pattern: "\\S" },
+    },
   },
 };
 

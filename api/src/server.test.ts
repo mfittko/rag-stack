@@ -194,6 +194,38 @@ describe("API integration tests", () => {
       await app.close();
     });
 
+    it("returns 400 for empty filter object without query", async () => {
+      const app = buildApp();
+      const res = await app.inject({
+        method: "POST",
+        url: "/query",
+        headers: {
+          authorization: "Bearer test-token",
+        },
+        payload: { filter: {} },
+      });
+
+      expect(res.statusCode).toBe(400);
+      await app.close();
+    });
+
+    it("returns 200 for filter-only request with conditions", async () => {
+      const app = buildApp();
+      const res = await app.inject({
+        method: "POST",
+        url: "/query",
+        headers: {
+          authorization: "Bearer test-token",
+        },
+        payload: {
+          filter: { must: [{ key: "lang", match: { value: "ts" } }] },
+        },
+      });
+
+      expect(res.statusCode).toBe(200);
+      await app.close();
+    });
+
     it("returns 400 when both graphExpand and graph are provided", async () => {
       const app = buildApp();
       const res = await app.inject({
@@ -466,6 +498,18 @@ describe("API integration tests", () => {
   });
 
   describe("POST /query/download-first", () => {
+    it("returns 400 for whitespace-only query", async () => {
+      const app = buildApp();
+      const res = await app.inject({
+        method: "POST",
+        url: "/query/download-first",
+        headers: { authorization: "Bearer test-token" },
+        payload: { query: "   " },
+      });
+      expect(res.statusCode).toBe(400);
+      await app.close();
+    });
+
     it("returns 404 when no results found", async () => {
       const { getPool } = await import("./db.js");
       (getPool as any).mockReturnValueOnce({
@@ -760,6 +804,21 @@ describe("API integration tests", () => {
   });
 
   describe("POST /query/fulltext-first", () => {
+    it("returns 400 for whitespace-only query", async () => {
+      const app = buildApp();
+      const res = await app.inject({
+        method: "POST",
+        url: "/query/fulltext-first",
+        headers: {
+          authorization: "Bearer test-token",
+        },
+        payload: { query: "   " },
+      });
+
+      expect(res.statusCode).toBe(400);
+      await app.close();
+    });
+
     it("returns 404 when no results found", async () => {
       const { getPool } = await import("./db.js");
       (getPool as any).mockReturnValueOnce({

@@ -71,6 +71,18 @@ export function buildApp() {
 
   registerAuth(app);
 
+  function hasFilterConditions(filter: unknown): boolean {
+    if (!filter || typeof filter !== "object" || Array.isArray(filter)) {
+      return false;
+    }
+    const obj = filter as Record<string, unknown>;
+    if (Array.isArray(obj.conditions) && obj.conditions.length > 0) return true;
+    if (Array.isArray(obj.must) && obj.must.length > 0) return true;
+    if (Array.isArray(obj.must_not) && obj.must_not.length > 0) return true;
+    if (Array.isArray(obj.should) && obj.should.length > 0) return true;
+    return false;
+  }
+
   app.post("/ingest", { 
     schema: ingestSchema,
     preValidation: async (req, reply) => {
@@ -98,13 +110,10 @@ export function buildApp() {
       // Require either a non-empty query OR a filter with conditions
       const hasQuery =
         typeof body?.query === "string" && body.query.trim().length > 0;
-      const hasFilter =
-        body?.filter !== undefined &&
-        body.filter !== null &&
-        typeof body.filter === "object";
+      const hasFilter = hasFilterConditions(body?.filter);
       if (!hasQuery && !hasFilter) {
         return reply.status(400).send({
-          error: "Request must include either a non-empty query or a filter",
+          error: "Request must include either a non-empty query or a filter with conditions",
         });
       }
     },
