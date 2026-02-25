@@ -77,7 +77,7 @@ describe("SqlGraphBackend.resolveEntities", () => {
   it("returns empty for unresolved names when no prefix match", async () => {
     const pool = makePool([
       { rows: [] },  // exact match returns nothing
-      { rows: [] },  // prefix fallback returns nothing
+      { rows: [] },  // batched prefix fallback returns nothing
     ]);
     const backend = new SqlGraphBackend(pool as any);
     const result = await backend.resolveEntities(["unknown"]);
@@ -89,9 +89,9 @@ describe("SqlGraphBackend.resolveEntities", () => {
       { rows: [] },  // exact match returns nothing
       {
         rows: [
-          { id: "uuid-2", name: "AuthService", type: "service", description: null, mention_count: 1 },
+          { matched_prefix: "auth", id: "uuid-2", name: "AuthService", type: "service", description: null, mention_count: 1 },
         ],
-      },  // prefix returns 1 match
+      },  // batched prefix returns 1 match for "auth"
     ]);
     const backend = new SqlGraphBackend(pool as any);
     const result = await backend.resolveEntities(["Auth"]);
@@ -106,10 +106,10 @@ describe("SqlGraphBackend.resolveEntities", () => {
       { rows: [] },  // exact match returns nothing
       {
         rows: [
-          { id: "uuid-2", name: "AuthService", type: "service", description: null, mention_count: 1 },
-          { id: "uuid-3", name: "AuthProvider", type: "service", description: null, mention_count: 1 },
+          { matched_prefix: "auth", id: "uuid-2", name: "AuthService", type: "service", description: null, mention_count: 1 },
+          { matched_prefix: "auth", id: "uuid-3", name: "AuthProvider", type: "service", description: null, mention_count: 1 },
         ],
-      },  // prefix returns 2 matches
+      },  // batched prefix returns 2 matches for "auth"
     ]);
     const backend = new SqlGraphBackend(pool as any);
     const result = await backend.resolveEntities(["Auth"]);

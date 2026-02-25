@@ -30,15 +30,15 @@ function constructPaths(
     edgeLookup.get(bwd)!.push(rel.type);
   }
 
-  // Leaf: no other path starts with this path as a strict prefix
-  const leafEntities = entities.filter(
-    (e) =>
-      !entities.some(
-        (other) =>
-          other.pathNames.length > e.pathNames.length &&
-          other.pathNames.slice(0, e.pathNames.length).every((name, i) => name === e.pathNames[i]),
-      ),
-  );
+  // Build a set of all strict path prefixes so leaf detection is O(n·L) not O(n²)
+  const isPrefixOf = new Set<string>();
+  for (const e of entities) {
+    for (let j = 1; j < e.pathNames.length; j++) {
+      isPrefixOf.add(e.pathNames.slice(0, j).join("\x00"));
+    }
+  }
+  // Leaf: its path key does not appear as a strict prefix of any other path
+  const leafEntities = entities.filter((e) => !isPrefixOf.has(e.pathNames.join("\x00")));
 
   // Deduplicate leaf paths by value equality
   const seen = new Set<string>();
@@ -127,31 +127,51 @@ export class SqlGraphBackend implements GraphBackend {
     // Prefix fallback for unresolved names (only when ≤ 10 unresolved)
     const unresolved = uniqueNames.filter((n) => !resolved.has(n.toLowerCase()));
     if (unresolved.length > 0 && unresolved.length <= 10) {
-      for (const name of unresolved) {
-        const prefixResult = await this.pool.query<{
-          id: string;
-          name: string;
-          type: string;
-          description: string | null;
-          mention_count: number;
-        }>(
-          `SELECT id::text, name, type, description, mention_count
+      const unresolvedLower = unresolved.map((n) => n.toLowerCase());
+      // Single batched query: lateral join returns at most 2 rows per prefix so we can
+      // distinguish 0 / 1 / 2+ matches per requested name without N+1 round trips.
+      const prefixResult = await this.pool.query<{
+        matched_prefix: string;
+        id: string;
+        name: string;
+        type: string;
+        description: string | null;
+        mention_count: number;
+      }>(
+        `SELECT p.prefix AS matched_prefix, e.id::text AS id, e.name, e.type, e.description, e.mention_count
+         FROM unnest($1::text[]) AS p(prefix)
+         JOIN LATERAL (
+           SELECT id, name, type, description, mention_count
            FROM entities
-           WHERE LOWER(name) LIKE $1 || '%'
+           WHERE LOWER(name) LIKE p.prefix || '%'
            ORDER BY name, id
-           LIMIT 2`,
-          [name.toLowerCase()],
-        );
-        // Accept only unambiguous (exactly 1) prefix match
-        if (prefixResult.rows.length === 1) {
-          const row = prefixResult.rows[0];
-          resolved.set(name.toLowerCase(), {
+           LIMIT 2
+         ) e ON true
+         ORDER BY p.prefix, e.name, e.id`,
+        [unresolvedLower],
+      );
+
+      // Group candidates by matched prefix; accept only unambiguous (exactly 1) matches
+      const byPrefix = new Map<string, typeof prefixResult.rows>();
+      for (const row of prefixResult.rows) {
+        const group = byPrefix.get(row.matched_prefix);
+        if (group) {
+          group.push(row);
+        } else {
+          byPrefix.set(row.matched_prefix, [row]);
+        }
+      }
+
+      for (const [prefix, rows] of byPrefix) {
+        if (rows.length === 1) {
+          const row = rows[0];
+          resolved.set(prefix, {
             id: row.id,
             name: row.name,
             type: row.type ?? "unknown",
             description: row.description ?? undefined,
             mentionCount: row.mention_count,
-            requestedName: name,
+            requestedName: lowerToRequested.get(prefix) ?? prefix,
           });
         }
       }
