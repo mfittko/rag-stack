@@ -340,7 +340,28 @@ describe("query service", () => {
 
     expect(result.ok).toBe(true);
     expect(result.graph).toBeDefined();
-    expect(result.graph?.entities.length).toBeGreaterThan(0);
-    expect(result.graph?.relationships.length).toBeGreaterThan(0);
+    expect(result.graph?.entities).toEqual([
+      {
+        name: "EntityA",
+        type: "person",
+        depth: 0,
+        isSeed: true,
+        mentionCount: 0,
+      },
+      {
+        name: "EntityB",
+        type: "person",
+        depth: 1,
+        isSeed: false,
+        mentionCount: 0,
+      },
+    ]);
+    expect(result.graph?.relationships).toEqual([
+      {
+        source: "EntityA",
+        target: "EntityB",
+        type: "related_to",
+      },
+    ]);
   });
 });
