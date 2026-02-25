@@ -526,9 +526,11 @@ export async function cmdQuery(options: QueryOptions, deps: QueryCommandDeps = {
     if (Object.keys(filter).length > 0) {
       logger.warn("--repoId, --pathPrefix, and --lang are ignored when --since, --until, or --filterField is provided. Use --filterField to combine all filters.");
     }
-    const combine = (options.filterCombine === "or" || options.filterCombine === "and")
-      ? options.filterCombine
-      : "and";
+    if (options.filterCombine !== undefined && options.filterCombine !== "and" && options.filterCombine !== "or") {
+      logger.error(`Invalid --filterCombine value "${options.filterCombine}". Expected "and" or "or".`);
+      process.exit(2);
+    }
+    const combine = options.filterCombine === "or" ? "or" : "and";
     const dsl: CliFilterDSL = { conditions: dslConditions, combine };
     effectiveFilter = dsl as unknown as Record<string, unknown>;
   } else if (Object.keys(filter).length > 0) {

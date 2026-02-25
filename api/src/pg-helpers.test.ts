@@ -343,5 +343,11 @@ describe("pg-helpers", () => {
       expect(() => translateFilter(filter)).toThrow(FilterValidationError);
       expect(() => translateFilter(filter)).toThrow('Invalid combine operator "xor"');
     });
+
+    it("mixed format (conditions + legacy key) → FilterValidationError", () => {
+      const filter = { conditions: [{ field: "docType", op: "eq", value: "code" }], docType: "code" } as unknown as Record<string, unknown>;
+      expect(() => translateFilter(filter)).toThrow(FilterValidationError);
+      expect(() => translateFilter(filter)).toThrow("Mixed filter format");
+    });
   });
 });

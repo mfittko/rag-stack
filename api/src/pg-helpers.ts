@@ -280,6 +280,13 @@ export function translateFilter(
   }
 
   if ("conditions" in filter) {
+    const dslKeys = new Set(["conditions", "combine"]);
+    const extraKeys = Object.keys(filter).filter((k) => !dslKeys.has(k));
+    if (extraKeys.length > 0) {
+      throw new FilterValidationError(
+        `Mixed filter format detected: DSL key "conditions" cannot be combined with legacy keys: ${extraKeys.join(", ")}.`,
+      );
+    }
     return translateNewDSL(filter as FilterDSL, paramIndexOffset);
   }
 
