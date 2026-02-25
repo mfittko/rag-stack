@@ -661,7 +661,7 @@ describe("resolveTemporalShorthand", () => {
     const result = resolveTemporalShorthand("today");
     const today = new Date();
     today.setHours(0, 0, 0, 0);
-    expect(result).toBe(today.toISOString().replace(/\.\d{3}Z$/, ".000Z"));
+    expect(result).toBe(today.toISOString());
   });
 
   it("resolves 'yesterday' to start of yesterday", () => {
@@ -669,7 +669,7 @@ describe("resolveTemporalShorthand", () => {
     const yesterday = new Date();
     yesterday.setDate(yesterday.getDate() - 1);
     yesterday.setHours(0, 0, 0, 0);
-    expect(result).toBe(yesterday.toISOString().replace(/\.\d{3}Z$/, ".000Z"));
+    expect(result).toBe(yesterday.toISOString());
   });
 
   it("resolves '7d' to approximately 7 days ago", () => {
@@ -707,8 +707,8 @@ describe("resolveTemporalShorthand", () => {
     expect(resolveTemporalShorthand(iso)).toBe(iso);
   });
 
-  it("throws on unrecognised value containing 'Unrecognised'", () => {
-    expect(() => resolveTemporalShorthand("badvalue")).toThrow("Unrecognised");
+  it("throws on unrecognized value containing 'Unrecognized'", () => {
+    expect(() => resolveTemporalShorthand("badvalue")).toThrow("Unrecognized");
   });
 
   it("throws on empty string", () => {
@@ -737,6 +737,26 @@ describe("parseFilterField", () => {
     expect(cond.field).toBe("path");
     expect(cond.op).toBe("eq");
     expect(cond.value).toBe("src/lib:utils.ts");
+  });
+
+  it("parses in operator with comma-separated values", () => {
+    const cond = parseFilterField("lang:in:ts,js,py");
+    expect(cond).toEqual({ field: "lang", op: "in", values: ["ts", "js", "py"] });
+  });
+
+  it("parses notIn operator with comma-separated values", () => {
+    const cond = parseFilterField("docType:notIn:image,pdf");
+    expect(cond).toEqual({ field: "docType", op: "notIn", values: ["image", "pdf"] });
+  });
+
+  it("parses between operator with low,high", () => {
+    const cond = parseFilterField("createdAt:between:2025-01-01,2025-12-31");
+    expect(cond).toEqual({ field: "createdAt", op: "between", range: { low: "2025-01-01", high: "2025-12-31" } });
+  });
+
+  it("parses notBetween operator with low,high", () => {
+    const cond = parseFilterField("chunkIndex:notBetween:5,10");
+    expect(cond).toEqual({ field: "chunkIndex", op: "notBetween", range: { low: "5", high: "10" } });
   });
 
   it("throws when format is missing a colon", () => {

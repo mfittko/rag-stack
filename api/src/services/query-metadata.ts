@@ -29,7 +29,7 @@ export async function queryMetadata(
 
   // Translate filter — offset by 2 for $1=collection, $2=topK
   const { sql: filterSql, params: filterParams } = translateFilter(
-    request.filter as Record<string, unknown> | undefined,
+    request.filter,
     2,
   );
 

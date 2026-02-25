@@ -220,8 +220,8 @@ function formatKeywordsForOutput(result: QueryResult): string[] {
  * Resolves a temporal shorthand to an ISO 8601 string.
  *
  * Supported shorthands:
- *   today        → start of today (T00:00:00.000Z in local timezone)
- *   yesterday    → start of yesterday
+ *   today        → start of today in local timezone, returned as UTC ISO 8601
+ *   yesterday    → start of yesterday in local timezone, returned as UTC ISO 8601
  *   <N>d         → now minus N days
  *   <N>y         → now minus N years
  *   ISO 8601     → passed through unchanged
@@ -232,14 +232,14 @@ export function resolveTemporalShorthand(value: string): string {
   if (normalized === "today") {
     const d = new Date();
     d.setHours(0, 0, 0, 0);
-    return d.toISOString().replace(/\.\d{3}Z$/, ".000Z");
+    return d.toISOString();
   }
 
   if (normalized === "yesterday") {
     const d = new Date();
     d.setDate(d.getDate() - 1);
     d.setHours(0, 0, 0, 0);
-    return d.toISOString().replace(/\.\d{3}Z$/, ".000Z");
+    return d.toISOString();
   }
 
   const daysMatch = /^(\d+)d$/i.exec(normalized);
@@ -263,12 +263,17 @@ export function resolveTemporalShorthand(value: string): string {
     return normalized;
   }
 
-  throw new Error(`Unrecognised temporal value: "${value}". Expected today, yesterday, <N>d, <N>y, or ISO 8601 date.`);
+  throw new Error(`Unrecognized temporal value: "${value}". Expected today, yesterday, <N>d, <N>y, or ISO 8601 date.`);
 }
 
 /**
- * Parses a --filterField token of the form "field:op:value".
- * For operators without a value (isNull, isNotNull), only "field:op" is required.
+ * Parses a --filterField token into a CliFilterCondition.
+ *
+ * Supported formats:
+ *   field:op:value              → single value (eq, ne, gt, gte, lt, lte)
+ *   field:op                    → no-value operators (isNull, isNotNull)
+ *   field:in:val1,val2,...      → comma-separated list for in/notIn
+ *   field:between:low,high      → comma-separated low,high for between/notBetween
  */
 export function parseFilterField(token: string): CliFilterCondition {
   const firstColon = token.indexOf(":");
@@ -280,6 +285,8 @@ export function parseFilterField(token: string): CliFilterCondition {
   const rest = token.slice(firstColon + 1);
   const secondColon = rest.indexOf(":");
   const noValueOps = new Set(["isNull", "isNotNull"]);
+  const arrayOps = new Set(["in", "notIn"]);
+  const rangeOps = new Set(["between", "notBetween"]);
 
   if (secondColon === -1) {
     const op = rest;
@@ -290,11 +297,31 @@ export function parseFilterField(token: string): CliFilterCondition {
   }
 
   const op = rest.slice(0, secondColon);
-  const value = rest.slice(secondColon + 1);
-  return { field, op, value };
+  const rawValue = rest.slice(secondColon + 1);
+
+  if (arrayOps.has(op)) {
+    const values = rawValue.split(",").map((v) => v.trim()).filter((v) => v.length > 0);
+    if (values.length === 0) {
+      throw new Error(`Invalid --filterField "${token}": operator "${op}" requires at least one value`);
+    }
+    return { field, op, values };
+  }
+
+  if (rangeOps.has(op)) {
+    const parts = rawValue.split(",");
+    if (parts.length < 2) {
+      throw new Error(`Invalid --filterField "${token}": operator "${op}" requires format low,high`);
+    }
+    const low = parts[0].trim();
+    const high = parts.slice(1).join(",").trim();
+    return { field, op, range: { low, high } };
+  }
+
+  return { field, op, value: rawValue };
 }
 
-function looksLikeHttpUrl(value: string): boolean {  try {
+function looksLikeHttpUrl(value: string): boolean {
+  try {
     const parsed = new URL(value);
     return parsed.protocol === "http:" || parsed.protocol === "https:";
   } catch {
@@ -496,6 +523,9 @@ export async function cmdQuery(options: QueryOptions, deps: QueryCommandDeps = {
   // Determine the effective filter to send: DSL takes precedence over legacy plain filter
   let effectiveFilter: Record<string, unknown> | CliFilterDSL | undefined;
   if (dslConditions.length > 0) {
+    if (Object.keys(filter).length > 0) {
+      logger.warn("--repoId, --pathPrefix, and --lang are ignored when --since, --until, or --filterField is provided. Use --filterField to combine all filters.");
+    }
     const combine = (options.filterCombine === "or" || options.filterCombine === "and")
       ? options.filterCombine
       : "and";

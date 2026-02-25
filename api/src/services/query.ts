@@ -70,7 +70,7 @@ export async function query(
   const maxDistance = 1 - minScore;
 
   // Translate filter to Postgres WHERE clause (offset by 4 for base params: $1=collection, $2=vector, $3=topK, $4=maxDistance)
-  const { sql: filterSql, params: filterParams } = translateFilter(request.filter as Record<string, unknown> | undefined, 4);
+  const { sql: filterSql, params: filterParams } = translateFilter(request.filter, 4);
 
   // Build query with pgvector cosine distance
   const pool = getPool();

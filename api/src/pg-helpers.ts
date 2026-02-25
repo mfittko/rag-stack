@@ -169,7 +169,13 @@ function translateNewDSL(
   dsl: FilterDSL,
   paramIndexOffset: number,
 ): { sql: string; params: unknown[] } {
-  const combine = (dsl.combine ?? "and").toUpperCase();
+  const rawCombine = dsl.combine ?? "and";
+  if (rawCombine !== "and" && rawCombine !== "or") {
+    throw new FilterValidationError(
+      `Invalid combine operator "${rawCombine}". Expected "and" or "or".`,
+    );
+  }
+  const combine = rawCombine.toUpperCase();
   const sqlFragments: string[] = [];
   const params: unknown[] = [];
   let paramIndex = 1 + paramIndexOffset;
@@ -265,7 +271,7 @@ function translateLegacyFilter(
  * @param tableAlias - Table alias for legacy path (default: "c"); ignored in new DSL
  */
 export function translateFilter(
-  filter?: Record<string, unknown>,
+  filter?: Record<string, unknown> | FilterDSL,
   paramIndexOffset = 0,
   tableAlias = "c"
 ): { sql: string; params: unknown[] } {
@@ -274,10 +280,10 @@ export function translateFilter(
   }
 
   if ("conditions" in filter) {
-    return translateNewDSL(filter as unknown as FilterDSL, paramIndexOffset);
+    return translateNewDSL(filter as FilterDSL, paramIndexOffset);
   }
 
-  return translateLegacyFilter(filter, paramIndexOffset, tableAlias);
+  return translateLegacyFilter(filter as Record<string, unknown>, paramIndexOffset, tableAlias);
 }
 
 /**

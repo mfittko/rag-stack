@@ -337,5 +337,11 @@ describe("pg-helpers", () => {
       const err = new FilterValidationError("test");
       expect(err.statusCode).toBe(400);
     });
+
+    it("invalid combine value → FilterValidationError", () => {
+      const filter = { conditions: [{ field: "docType", op: "eq", value: "code" }], combine: "xor" as "and" };
+      expect(() => translateFilter(filter)).toThrow(FilterValidationError);
+      expect(() => translateFilter(filter)).toThrow('Invalid combine operator "xor"');
+    });
   });
 });
