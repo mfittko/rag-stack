@@ -432,6 +432,7 @@ export class SqlGraphBackend implements GraphBackend {
       type: row.type ?? "unknown",
       description: row.description ?? undefined,
       mentionCount: row.mention_count,
+      requestedName: name,
     };
   }
 
