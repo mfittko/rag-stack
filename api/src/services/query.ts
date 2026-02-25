@@ -1,6 +1,7 @@
 import { getPool } from "../db.js";
 import { translateFilter } from "../pg-helpers.js";
 import { embed as embedTexts } from "../embeddings.js";
+import type { FilterDSL } from "../pg-helpers.js";
 import type { GraphParams } from "./graph-strategy.js";
 import { executeGraphStrategy } from "./graph-strategy.js";
 import { SqlGraphBackend } from "./sql-graph-backend.js";
@@ -12,7 +13,7 @@ export interface QueryRequest {
   query: string;
   topK?: number;
   minScore?: number;
-  filter?: Record<string, unknown>;
+  filter?: Record<string, unknown> | FilterDSL;
   /** @deprecated Use `graph` instead. */
   graphExpand?: boolean;
   graph?: GraphParams;

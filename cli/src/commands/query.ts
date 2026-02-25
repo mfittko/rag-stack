@@ -6,7 +6,7 @@ import fs from "node:fs/promises";
 import { downloadFirstQueryMatch, downloadFirstQueryMatchText, getCollections, query } from "../lib/api-client.js";
 import { getDefaultApiUrl } from "../lib/env.js";
 import { logger } from "../lib/logger.js";
-import type { QueryResult } from "../lib/types.js";
+import type { QueryResult, CliFilterCondition, CliFilterDSL } from "../lib/types.js";
 
 interface QueryOptions {
   q?: string;
@@ -29,6 +29,10 @@ interface QueryOptions {
   pathPrefix?: string;
   lang?: string;
   positionalQuery?: string;
+  since?: string;
+  until?: string;
+  filterField?: string[];
+  filterCombine?: string;
 }
 
 interface QueryPayload {
@@ -212,6 +216,110 @@ function formatKeywordsForOutput(result: QueryResult): string[] {
   return [];
 }
 
+/**
+ * Resolves a temporal shorthand to an ISO 8601 string.
+ *
+ * Supported shorthands:
+ *   today        → start of today in local timezone, returned as UTC ISO 8601
+ *   yesterday    → start of yesterday in local timezone, returned as UTC ISO 8601
+ *   <N>d         → now minus N days
+ *   <N>y         → now minus N years
+ *   ISO 8601     → passed through unchanged
+ */
+export function resolveTemporalShorthand(value: string): string {
+  const normalized = value.trim();
+
+  if (normalized === "today") {
+    const d = new Date();
+    d.setHours(0, 0, 0, 0);
+    return d.toISOString();
+  }
+
+  if (normalized === "yesterday") {
+    const d = new Date();
+    d.setDate(d.getDate() - 1);
+    d.setHours(0, 0, 0, 0);
+    return d.toISOString();
+  }
+
+  const daysMatch = /^(\d+)d$/i.exec(normalized);
+  if (daysMatch) {
+    const days = parseInt(daysMatch[1], 10);
+    const d = new Date();
+    d.setDate(d.getDate() - days);
+    return d.toISOString();
+  }
+
+  const yearsMatch = /^(\d+)y$/i.exec(normalized);
+  if (yearsMatch) {
+    const years = parseInt(yearsMatch[1], 10);
+    const d = new Date();
+    d.setFullYear(d.getFullYear() - years);
+    return d.toISOString();
+  }
+
+  // Validate that it looks like an ISO 8601 date/datetime
+  if (/^\d{4}-\d{2}-\d{2}/.test(normalized)) {
+    return normalized;
+  }
+
+  throw new Error(`Unrecognized temporal value: "${value}". Expected today, yesterday, <N>d, <N>y, or ISO 8601 date.`);
+}
+
+/**
+ * Parses a --filterField token into a CliFilterCondition.
+ *
+ * Supported formats:
+ *   field:op:value              → single value (eq, ne, gt, gte, lt, lte)
+ *   field:op                    → no-value operators (isNull, isNotNull)
+ *   field:in:val1,val2,...      → comma-separated list for in/notIn
+ *   field:between:low,high      → comma-separated low,high for between/notBetween
+ */
+export function parseFilterField(token: string): CliFilterCondition {
+  const firstColon = token.indexOf(":");
+  if (firstColon === -1) {
+    throw new Error(`Invalid --filterField "${token}": expected format field:op:value or field:op`);
+  }
+
+  const field = token.slice(0, firstColon);
+  const rest = token.slice(firstColon + 1);
+  const secondColon = rest.indexOf(":");
+  const noValueOps = new Set(["isNull", "isNotNull"]);
+  const arrayOps = new Set(["in", "notIn"]);
+  const rangeOps = new Set(["between", "notBetween"]);
+
+  if (secondColon === -1) {
+    const op = rest;
+    if (!noValueOps.has(op)) {
+      throw new Error(`Invalid --filterField "${token}": operator "${op}" requires a value`);
+    }
+    return { field, op };
+  }
+
+  const op = rest.slice(0, secondColon);
+  const rawValue = rest.slice(secondColon + 1);
+
+  if (arrayOps.has(op)) {
+    const values = rawValue.split(",").map((v) => v.trim()).filter((v) => v.length > 0);
+    if (values.length === 0) {
+      throw new Error(`Invalid --filterField "${token}": operator "${op}" requires at least one value`);
+    }
+    return { field, op, values };
+  }
+
+  if (rangeOps.has(op)) {
+    const parts = rawValue.split(",");
+    if (parts.length < 2) {
+      throw new Error(`Invalid --filterField "${token}": operator "${op}" requires format low,high`);
+    }
+    const low = parts[0].trim();
+    const high = parts.slice(1).join(",").trim();
+    return { field, op, range: { low, high } };
+  }
+
+  return { field, op, value: rawValue };
+}
+
 function looksLikeHttpUrl(value: string): boolean {
   try {
     const parsed = new URL(value);
@@ -374,9 +482,64 @@ export async function cmdQuery(options: QueryOptions, deps: QueryCommandDeps = {
   if (pathPrefix) filter.path = pathPrefix;
   if (lang) filter.lang = lang;
 
+  // Build DSL filter conditions from --since, --until, and --filterField flags
+  const dslConditions: CliFilterCondition[] = [];
+
+  if (options.since !== undefined) {
+    let resolvedSince: string;
+    try {
+      resolvedSince = resolveTemporalShorthand(options.since);
+    } catch (e) {
+      logger.error(String(e instanceof Error ? e.message : e));
+      process.exit(2);
+    }
+    dslConditions.push({ field: "ingestedAt", op: "gte", value: resolvedSince, alias: "d" });
+  }
+
+  if (options.until !== undefined) {
+    let resolvedUntil: string;
+    try {
+      resolvedUntil = resolveTemporalShorthand(options.until);
+    } catch (e) {
+      logger.error(String(e instanceof Error ? e.message : e));
+      process.exit(2);
+    }
+    dslConditions.push({ field: "ingestedAt", op: "lte", value: resolvedUntil, alias: "d" });
+  }
+
+  if (options.filterField && options.filterField.length > 0) {
+    for (const token of options.filterField) {
+      let cond: CliFilterCondition;
+      try {
+        cond = parseFilterField(token);
+      } catch (e) {
+        logger.error(String(e instanceof Error ? e.message : e));
+        process.exit(2);
+      }
+      dslConditions.push(cond);
+    }
+  }
+
+  // Determine the effective filter to send: DSL takes precedence over legacy plain filter
+  let effectiveFilter: Record<string, unknown> | CliFilterDSL | undefined;
+  if (dslConditions.length > 0) {
+    if (Object.keys(filter).length > 0) {
+      logger.warn("--repoId, --pathPrefix, and --lang are ignored when --since, --until, or --filterField is provided. Use --filterField to combine all filters.");
+    }
+    if (options.filterCombine !== undefined && options.filterCombine !== "and" && options.filterCombine !== "or") {
+      logger.error(`Invalid --filterCombine value "${options.filterCombine}". Expected "and" or "or".`);
+      process.exit(2);
+    }
+    const combine = options.filterCombine === "or" ? "or" : "and";
+    const dsl: CliFilterDSL = { conditions: dslConditions, combine };
+    effectiveFilter = dsl as unknown as Record<string, unknown>;
+  } else if (Object.keys(filter).length > 0) {
+    effectiveFilter = filter;
+  }
+
   const scopedResults = await Promise.all(
     targetCollections.map(async (collectionName) => {
-      const out = await query(api, collectionName, queryText, topK, minScore, Object.keys(filter).length > 0 ? filter : undefined, token);
+      const out = await query(api, collectionName, queryText, topK, minScore, effectiveFilter as Record<string, unknown> | undefined, token);
       const results = (out?.results ?? []) as QueryResult[];
       return results.map((item) => ({ ...item, collection: collectionName })) as RankedQueryResult[];
     })
@@ -453,7 +616,7 @@ export async function cmdQuery(options: QueryOptions, deps: QueryCommandDeps = {
       queryText,
       topK,
       minScore,
-      Object.keys(filter).length > 0 ? filter : undefined,
+      effectiveFilter as Record<string, unknown> | undefined,
       token,
     );
     if (shouldStdout) {
@@ -476,7 +639,7 @@ export async function cmdQuery(options: QueryOptions, deps: QueryCommandDeps = {
       queryText,
       topK,
       minScore,
-      Object.keys(filter).length > 0 ? filter : undefined,
+      effectiveFilter as Record<string, unknown> | undefined,
       token,
     );
 
@@ -518,6 +681,10 @@ export function registerQueryCommand(program: Command): void {
     .option("--repoId <id>", "Filter by repository ID")
     .option("--pathPrefix <prefix>", "Filter by file path prefix")
     .option("--lang <lang>", "Filter by language")
+    .option("--since <value>", "Temporal lower bound for ingestedAt (today, yesterday, <N>d, <N>y, or ISO 8601)")
+    .option("--until <value>", "Temporal upper bound for ingestedAt (today, yesterday, <N>d, <N>y, or ISO 8601)")
+    .option("--filterField <f:op:v>", "Structured filter condition (repeatable). Format: field:op:value or field:op", (val, prev: string[]) => [...(prev ?? []), val], [] as string[])
+    .option("--filterCombine <and|or>", "How to join --filterField conditions (default: and)")
     .option("--token <token>", "Bearer token for auth")
     .action((queryText: string[] | undefined, options: QueryOptions) => {
       const positional = Array.isArray(queryText) ? queryText.join(" ").trim() : "";

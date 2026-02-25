@@ -63,3 +63,21 @@ export interface GraphEntityResponse {
     id: string;
   }>;
 }
+
+// ---------------------------------------------------------------------------
+// CLI filter DSL types
+// ---------------------------------------------------------------------------
+
+export interface CliFilterCondition {
+  field: string;
+  op: string;
+  value?: string;
+  values?: string[];
+  range?: { low: string; high: string };
+  alias?: string;
+}
+
+export interface CliFilterDSL {
+  conditions: CliFilterCondition[];
+  combine?: "and" | "or";
+}

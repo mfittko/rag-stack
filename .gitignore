@@ -10,3 +10,8 @@ dist/
 tmp/**
 !tmp/.keep
 coverage/
+
+# Local BMAD artifacts
+_bmad/
+_bmad-output/
+.claude/commands/
