@@ -249,6 +249,8 @@ export async function hybridMetadataFlow(
 
   // -------------------------------------------------------------------------
   // Phase 1: retrieve candidate IDs via metadata filter (no embedding)
+  // Required index: chunks(document_id) + documents(collection) — standard FK index.
+  // For large collections, a composite index on (document_id, created_at) improves ORDER BY.
   // -------------------------------------------------------------------------
   const { sql: filterSql, params: filterParams } = translateFilter(filter, 2);
 
@@ -278,7 +280,10 @@ export async function hybridMetadataFlow(
   }
 
   // Single batch query — no N+1 pattern.
-  // chunk_id is "uuid:index" string so we can't use uuid[] cast; use text[].
+  // Note: the WHERE predicate `c.id::text || ':' || c.chunk_index::text = ANY(...)` evaluates
+  // the expression for every row (full scan on the filtered set), since the expression is not
+  // indexed. This is acceptable because candidateLimit caps the candidate set at 500 rows.
+  // For future optimisation, store chunk_id as a generated column with an index.
   const rerankResult = await pool.query<RerankRow>(
     `SELECT
        c.id::text || ':' || c.chunk_index::text AS chunk_id,
@@ -451,11 +456,13 @@ export async function hybridGraphFlow(
   // -------------------------------------------------------------------------
   // Step 6: fetch connected-document entity docs (single batch call, no N+1)
   // -------------------------------------------------------------------------
-  const connectedEntityIds = traversalResult.entities.map((e) => e.id);
+  // graphEntityIds includes all entities from the traversal (seeds + connected).
+  // getEntityDocuments returns document associations for all of them.
+  const graphEntityIds = traversalResult.entities.map((e) => e.id);
 
   let entityDocs: EntityDocument[] = [];
-  if (connectedEntityIds.length > 0) {
-    entityDocs = await backend.getEntityDocuments(connectedEntityIds, candidateLimit);
+  if (graphEntityIds.length > 0) {
+    entityDocs = await backend.getEntityDocuments(graphEntityIds, candidateLimit);
   }
 
   // Build graph result for response (documents omitted — they appear in results[])
@@ -521,7 +528,9 @@ export async function hybridGraphFlow(
   // Step 8: merge graph pool + seed pool with blended scoring
   // -------------------------------------------------------------------------
 
-  // Build mention-count lookup: documentId → max mentionCount for that doc
+  // Build mention-count lookup: documentId → max mentionCount for that doc.
+  // Max is used so that a document with multiple entity mentions gets the
+  // highest individual entity mention count (most prominent entity wins).
   const mentionByDoc = new Map<string, number>();
   for (const doc of entityDocs) {
     const current = mentionByDoc.get(doc.documentId) ?? 0;
@@ -530,9 +539,12 @@ export async function hybridGraphFlow(
     }
   }
 
-  // chunk_id is "uuid:chunkIndex" — extract document UUID for mention lookup
+  // chunk_id is "uuid:chunkIndex" — extract document UUID for mention lookup.
+  // split(":")[0] is always a string (never undefined), but could be empty for
+  // malformed IDs. Fall back to the full chunk_id in that case.
   function docIdFromChunkId(chunkId: string): string {
-    return chunkId.split(":")[0] ?? chunkId;
+    const part = chunkId.split(":")[0];
+    return part !== "" ? (part as string) : chunkId;
   }
 
   const graphPool: GraphPoolEntry[] = rerankResult.rows.map((row) => {
