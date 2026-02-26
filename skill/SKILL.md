@@ -102,9 +102,7 @@ curl -s -X POST "$RAGED_URL/query" \
     "query": "error handling",
     "topK": 5,
     "filter": {
-      "must": [
-        {"key": "repoId", "match": {"value": "my-repo"}}
-      ]
+      "repoId": "my-repo"
     }
   }' | jq '.results[] | {score, source, text: (.text | .[0:200])}'
 ```
@@ -119,9 +117,7 @@ curl -s -X POST "$RAGED_URL/query" \
     "query": "database connection",
     "topK": 5,
     "filter": {
-      "must": [
-        {"key": "lang", "match": {"value": "ts"}}
-      ]
+      "lang": "ts"
     }
   }' | jq '.results[] | {score, source, text: (.text | .[0:200])}'
 ```
@@ -136,14 +132,12 @@ curl -s -X POST "$RAGED_URL/query" \
     "query": "route handler",
     "topK": 5,
     "filter": {
-      "must": [
-        {"key": "path", "match": {"text": "src/api/"}}
-      ]
+      "path": "src/api/"
     }
   }' | jq '.results[] | {score, source, text: (.text | .[0:200])}'
 ```
 
-Combine multiple filters (AND logic) by adding entries to the `must` array.
+Combine multiple filters (AND logic) by adding more keys to the `filter` object.
 
 ### Query Parameters
 
@@ -151,13 +145,14 @@ Combine multiple filters (AND logic) by adding entries to the `must` array.
 |-------|------|---------|-------------|
 | `query` | string | **required** | Natural-language search text |
 | `topK` | number | `8` | Number of results to return |
-| `collection` | string | `docs` | Qdrant collection to search |
-| `filter` | object | _(none)_ | Qdrant filter with `must` array |
-| `graphExpand` | boolean | `false` | Enable graph-based entity expansion (requires Neo4j) |
+| `collection` | string | `docs` | Collection to search |
+| `filter` | object | _(none)_ | Key-value filter or DSL filter with `conditions` array |
+| `strategy` | enum | _(auto)_ | Force a strategy: `semantic`, `metadata`, `graph`, `hybrid` |
+| `graphExpand` | boolean | `false` | Deprecated. Use `strategy: "graph"` instead |
 
 ### Query with Graph Expansion
 
-When Neo4j is enabled, queries can expand results to include related entities from the knowledge graph:
+Use `strategy: "graph"` to expand results with related entities from the knowledge graph:
 
 ```bash
 curl -s -X POST "$RAGED_URL/query" \
@@ -166,11 +161,11 @@ curl -s -X POST "$RAGED_URL/query" \
   -d '{
     "query": "authentication flow",
     "topK": 5,
-    "graphExpand": true
+    "strategy": "graph"
   }' | jq .
 ```
 
-Response includes both vector results and extracted/expanded entities:
+Response includes vector results, graph data, and routing metadata:
 
 ```json
 {
@@ -178,21 +173,72 @@ Response includes both vector results and extracted/expanded entities:
   "results": [ /* vector search results */ ],
   "graph": {
     "entities": [
-      { "name": "AuthService", "type": "class" },
-      { "name": "JWT", "type": "library" }
+      { "name": "AuthService", "type": "class", "depth": 0, "isSeed": true },
+      { "name": "JWT", "type": "library", "depth": 1, "isSeed": false }
     ],
-    "relationships": []
+    "relationships": [
+      { "source": "AuthService", "target": "JWT", "type": "uses" }
+    ],
+    "paths": [],
+    "documents": [],
+    "meta": { "entityCount": 2, "capped": false, "timedOut": false, "warnings": [], "seedEntities": ["a1b2c3"], "seedSource": "results", "maxDepthUsed": 2, "entityCap": 50, "timeLimitMs": 3000 }
+  },
+  "routing": {
+    "strategy": "graph",
+    "method": "explicit",
+    "confidence": 1.0,
+    "durationMs": 5
   }
 }
 ```
 
+### Query Strategies
+
+Every query response includes a `routing` field describing how the strategy was selected.
+
+| Strategy | When to use | Score | Notes |
+|----------|-------------|-------|-------|
+| `semantic` | Natural-language questions (default) | cosine similarity | Fast vector search |
+| `metadata` | Filter-only lookups, no query text needed | `1.0` | `text` field absent in results |
+| `graph` | Entity-centric questions, relationship traversal | cosine similarity | Includes `graph` field |
+| `hybrid` | Mixed filter + semantic or graph + semantic | blended | Includes `graph` field |
+
+**Force a specific strategy:**
+
+```bash
+# Force metadata-only scan (no embedding)
+curl -s -X POST "$RAGED_URL/query" \
+  -H "Content-Type: application/json" \
+  -d '{"collection":"docs","strategy":"metadata","filter":{"lang":"ts"}}' | jq '.results[].source'
+
+# Force graph traversal
+curl -s -X POST "$RAGED_URL/query" \
+  -H "Content-Type: application/json" \
+  -d '{"query":"AuthService dependencies","strategy":"graph","topK":5}' | jq '.graph.entities[].name'
+```
+
+**Via CLI:**
+
+```bash
+# Force graph strategy
+node dist/index.js query --q "auth flow" --strategy graph
+
+# Force metadata strategy and show routing
+node dist/index.js query --q "all typescript files" --strategy metadata --lang ts --verbose
+
+# Always show routing decision
+node dist/index.js query --q "login handler" --verbose
+```
+
 ### Filter Keys
 
-| Key | Match Type | Example |
+| Key | Match Type | Example value |
 |-----|-----------|---------|
-| `repoId` | exact value | `{"key":"repoId","match":{"value":"my-repo"}}` |
-| `lang` | exact value | `{"key":"lang","match":{"value":"ts"}}` |
-| `path` | text prefix | `{"key":"path","match":{"text":"src/"}}` |
+| `repoId` | exact value | `"my-repo"` |
+| `lang` | exact value | `"ts"` |
+| `path` | prefix match | `"src/"` |
+| `docType` | exact value | `"code"` |
+| `enrichmentStatus` | exact value | `"enriched"` |
 
 ### Response Shape
 
@@ -207,11 +253,17 @@ Response includes both vector results and extracted/expanded entities:
       "text": "chunk content...",
       "payload": { "repoId": "...", "lang": "ts", "path": "src/auth.ts" }
     }
-  ]
+  ],
+  "routing": {
+    "strategy": "semantic",
+    "method": "rule",
+    "confidence": 0.9,
+    "durationMs": 12
+  }
 }
 ```
 
-Results are ordered by similarity score (highest first). `score` ranges 0.0–1.0.
+Results are ordered by similarity score (highest first). `score` ranges 0.0–1.0. For `metadata` strategy, `score` is always `1.0` and `text` is absent.
 
 ## Ingesting Content
 
