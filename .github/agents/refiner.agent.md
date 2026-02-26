@@ -15,7 +15,7 @@ Refinement means:
 - Resolving ambiguities and dependencies
 - Defining acceptance criteria and test strategy
 - Defining Definition of Done (DoD) criteria and completion evidence
-- Structuring sub-issues for parallel implementation (only when complexity justifies splitting)
+- Structuring sub-issues for parallel implementation
 
 Refinement does **not** mean implementing code.
 
@@ -28,21 +28,6 @@ Expect one or more of:
 - Delivery constraints (timeline, rollout, compatibility, migration)
 
 If critical input is missing, ask concise clarification questions first.
-
-## Sizing and Split Policy (Mandatory)
-
-Default to **single-issue / single-PR refinement**.
-
-Only split into sub-issues when at least one of these is true:
-- Distinct workstreams with hard dependencies (for example API first, then migration, then client rollout)
-- Different owners/skills are required and can run in parallel safely
-- Scope is too large for one focused PR without excessive risk
-- Independent deliverables are needed for staged release or rollback
-
-Do **not** split when the issue is small and coherent (for example docs-only alignment in a few files, a contained bug fix, or one focused behavior change).
-
-When you decide to split, include a short **Split Rationale** section in the refinement output that explains why a single PR is insufficient.
-If you cannot provide a concrete split rationale, keep it as one assignment-ready spec.
 
 ## Workflow
 
@@ -65,9 +50,7 @@ If you cannot provide a concrete split rationale, keep it as one assignment-read
 - Convert AC and DoD language into verifiable pass/fail checks.
 
 4. Produce Assignment-Ready Specs
-- First decide whether this should remain one issue or be split.
-- If **not split**: produce one assignment-ready spec with problem statement, technical approach, dependencies, acceptance criteria (testable), Definition of Done (testable), validation plan, risks/mitigations, and handoff notes.
-- If **split**: for each sub-issue, define:
+- For each sub-issue, define:
   - Problem statement
   - Technical approach
   - Dependencies
@@ -86,7 +69,7 @@ If you cannot provide a concrete split rationale, keep it as one assignment-read
 
 Deliverables must be clear, structured, and implementation-ready:
 - Refined epic summary
-- Single-scope spec (default) or sub-issue breakdown with ownership-ready scopes
+- Sub-issue breakdown with ownership-ready scopes
 - Decision log (assumption → resolution)
 - AC/DoD/Non-goal coverage matrix with status and evidence links
 - Open questions list (if any) with blocking impact
@@ -119,7 +102,6 @@ A refinement is complete only when:
 - DoD is explicit, testable, and mapped to evidence
 - Dependencies and sequencing are explicit
 - Coding agents can start without further product/architecture clarification
-- Scope is right-sized (no unnecessary decomposition of small, coherent work)
 
 If the source issue has no DoD section, refinement is not complete until a proposed DoD is authored and published in the tracking artifacts.
 
