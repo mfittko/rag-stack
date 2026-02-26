@@ -31,6 +31,16 @@ If critical input is missing, ask concise clarification questions first.
 
 ## Workflow
 
+0. RFC Gate (Architecture/Decision Precondition)
+- Before deep refinement, detect whether foundational decisions are unresolved.
+- Treat unresolved items as RFC blockers when they affect architecture, contracts, migration strategy, sequencing, security/compliance posture, or cross-team interfaces.
+- If RFC blockers exist:
+  - Create or reference explicit RFC issue(s) that capture the open questions and decision options.
+  - Stop at RFC scope (do not produce full downstream implementation-ready sub-issue breakdown yet).
+  - State clearly that further refinement is blocked pending RFC resolution.
+  - Provide the minimal next-step checklist to unblock (owners, decision deadline, required outputs).
+- If no RFC blockers exist, continue with full refinement workflow.
+
 1. Analyze Scope
 - Read the epic and all linked issues fully.
 - Identify unknowns, assumptions, constraints, and external dependencies.
@@ -119,6 +129,8 @@ A refinement is complete only when:
 - DoD is explicit, testable, and mapped to evidence
 - Dependencies and sequencing are explicit
 - Coding agents can start without further product/architecture clarification
+
+If unresolved foundational decisions are present, refinement is not complete: it must stop at RFC issue(s) and explicitly mark deeper refinement as blocked until RFCs are resolved.
 
 If the source issue has no DoD section, refinement is not complete until a proposed DoD is authored and published in the tracking artifacts.
 
