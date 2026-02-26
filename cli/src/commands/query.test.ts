@@ -671,6 +671,96 @@ describe("query command", () => {
     expect(sentBody.strategy).toBe("graph");
   });
 
+  it("should send strategy to /query/fulltext-first when --full and --strategy are used", async () => {
+    let fulltextBody: Record<string, unknown> | undefined;
+
+    globalThis.fetch = async (url: string | URL | Request, init?: RequestInit) => {
+      const requestUrl = String(url);
+      const body = init?.body ? JSON.parse(init.body as string) : undefined;
+
+      if (requestUrl.endsWith("/query")) {
+        return new Response(JSON.stringify({
+          results: [{ text: "chunk text", score: 0.95, source: "invoice-123.pdf" }],
+          routing: { strategy: "graph", method: "explicit", confidence: 1.0, durationMs: 5 },
+        }), {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        });
+      }
+
+      if (requestUrl.endsWith("/query/fulltext-first")) {
+        fulltextBody = body as Record<string, unknown>;
+        return new Response("full document text", {
+          status: 200,
+          headers: {
+            "content-type": "text/plain; charset=utf-8",
+            "content-disposition": 'attachment; filename="invoice-123.txt"',
+            "x-raged-source": "invoice-123.pdf",
+          },
+        });
+      }
+
+      return new Response("not found", { status: 404 });
+    };
+
+    const originalHome = process.env.HOME;
+    const tempHome = await fs.mkdtemp(path.join(os.tmpdir(), "raged-cli-test-"));
+    await fs.mkdir(path.join(tempHome, "Downloads"), { recursive: true });
+    process.env.HOME = tempHome;
+
+    await cmdQuery({ q: "packt invoice", full: true, strategy: "graph" });
+
+    expect(fulltextBody?.strategy).toBe("graph");
+
+    process.env.HOME = originalHome;
+    await fs.rm(tempHome, { recursive: true, force: true });
+  });
+
+  it("should send strategy to /query/download-first when --open and --strategy are used", async () => {
+    let downloadBody: Record<string, unknown> | undefined;
+
+    globalThis.fetch = async (url: string | URL | Request, init?: RequestInit) => {
+      const requestUrl = String(url);
+      const body = init?.body ? JSON.parse(init.body as string) : undefined;
+
+      if (requestUrl.endsWith("/query")) {
+        return new Response(JSON.stringify({
+          results: [{ text: "content", score: 0.95, source: "INV89909018.pdf" }],
+          routing: { strategy: "graph", method: "explicit", confidence: 1.0, durationMs: 5 },
+        }), {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        });
+      }
+
+      if (requestUrl.endsWith("/query/download-first")) {
+        downloadBody = body as Record<string, unknown>;
+        return new Response(Buffer.from("pdf-bytes"), {
+          status: 200,
+          headers: {
+            "content-type": "application/pdf",
+            "content-disposition": 'attachment; filename="INV89909018.pdf"',
+            "x-raged-source": "INV89909018.pdf",
+          },
+        });
+      }
+
+      return new Response("not found", { status: 404 });
+    };
+
+    const openDir = path.join(os.tmpdir(), "raged-open");
+    await fs.rm(openDir, { recursive: true, force: true });
+
+    await cmdQuery(
+      { q: "INV89909018", open: true, strategy: "graph" },
+      { openTargetFn: () => {} },
+    );
+
+    expect(downloadBody?.strategy).toBe("graph");
+
+    await fs.rm(openDir, { recursive: true, force: true });
+  });
+
   it("should omit strategy from request body when --strategy is not provided", async () => {
     let sentBody: Record<string, unknown> = {};
 

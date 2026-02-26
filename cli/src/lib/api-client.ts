@@ -55,12 +55,15 @@ export async function downloadFirstQueryMatch(
   topK: number,
   minScore: number,
   filter?: unknown,
+  strategy?: string,
   token?: string
 ): Promise<{ data: Buffer; fileName: string; source: string; mimeType: string }> {
+  const body: Record<string, unknown> = { collection, query: q, topK, minScore, filter };
+  if (strategy !== undefined) body.strategy = strategy;
   const res = await fetch(`${api.replace(/\/$/, "")}/query/download-first`, {
     method: "POST",
     headers: { "content-type": "application/json", ...authHeaders(token) },
-    body: JSON.stringify({ collection, query: q, topK, minScore, filter }),
+    body: JSON.stringify(body),
   });
 
   if (!res.ok) {
@@ -87,12 +90,15 @@ export async function downloadFirstQueryMatchText(
   topK: number,
   minScore: number,
   filter?: unknown,
+  strategy?: string,
   token?: string
 ): Promise<{ text: string; fileName: string; source: string }> {
+  const body: Record<string, unknown> = { collection, query: q, topK, minScore, filter };
+  if (strategy !== undefined) body.strategy = strategy;
   const res = await fetch(`${api.replace(/\/$/, "")}/query/fulltext-first`, {
     method: "POST",
     headers: { "content-type": "application/json", ...authHeaders(token) },
-    body: JSON.stringify({ collection, query: q, topK, minScore, filter }),
+    body: JSON.stringify(body),
   });
 
   if (!res.ok) {

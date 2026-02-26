@@ -699,6 +699,7 @@ export async function cmdQuery(options: QueryOptions, deps: QueryCommandDeps = {
       topK,
       minScore,
       effectiveFilter as Record<string, unknown> | undefined,
+      strategy,
       token,
     );
     if (shouldStdout) {
@@ -722,6 +723,7 @@ export async function cmdQuery(options: QueryOptions, deps: QueryCommandDeps = {
       topK,
       minScore,
       effectiveFilter as Record<string, unknown> | undefined,
+      strategy,
       token,
     );
 
