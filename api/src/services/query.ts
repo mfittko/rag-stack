@@ -9,7 +9,7 @@ import { classifyQuery } from "./query-router.js";
 import type { RoutingResult, QueryStrategy } from "./query-router.js";
 import { queryMetadata } from "./query-metadata.js";
 import { hybridMetadataFlow, hybridGraphFlow } from "./hybrid-strategy.js";
-import { extractStructuredFilter } from "./query-filter-parser.js";
+import { extractStructuredFilter, isFilterLlmEnabled } from "./query-filter-parser.js";
 
 export type { GraphParams, RoutingResult, QueryStrategy };
 
@@ -89,7 +89,7 @@ export async function query(
   let effectiveFilter: FilterDSL | Record<string, unknown> | undefined =
     request.filter;
 
-  if (!hasExplicitFilter && isAmbiguousRouting && hasQuery) {
+  if (!hasExplicitFilter && isAmbiguousRouting && hasQuery && isFilterLlmEnabled()) {
     const inferredFilter = await extractStructuredFilter({
       query: request.query as string,
       strategy: routing.strategy,

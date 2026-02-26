@@ -26,6 +26,11 @@ function getFilterLlmEnabled(): boolean {
   return process.env.ROUTER_FILTER_LLM_ENABLED === "true";
 }
 
+/** Returns true when the ROUTER_FILTER_LLM_ENABLED feature flag is active. */
+export function isFilterLlmEnabled(): boolean {
+  return getFilterLlmEnabled();
+}
+
 function getFilterLlmModel(): string {
   if (process.env.ROUTER_FILTER_LLM_MODEL) {
     return process.env.ROUTER_FILTER_LLM_MODEL;
@@ -142,9 +147,9 @@ Available fields and allowed operators:
 - lang: programming language code — use short codes only: "ts" (TypeScript), "js" (JavaScript), "py" (Python), "go" (Go), "rs" (Rust), "java" (Java), "rb" (Ruby), "cpp" (C++) (ops: eq, ne, in, notIn)
 - path: file path prefix string (ops: eq, ne, in, notIn)
 - mimeType: MIME type string (ops: eq, ne, in, notIn)
-- ingestedAt: ingestion timestamp ISO 8601 date string, e.g. "2023-01-01" (ops: eq, ne, gt, gte, lt, lte, between)
-- createdAt: creation timestamp ISO 8601 date string (ops: eq, ne, gt, gte, lt, lte, between)
-- updatedAt: last update timestamp ISO 8601 date string (ops: eq, ne, gt, gte, lt, lte, between)
+- ingestedAt: ingestion timestamp ISO 8601 date string, e.g. "2023-01-01" (ops: eq, ne, gt, gte, lt, lte, between, notBetween, in, notIn, isNull, isNotNull)
+- createdAt: creation timestamp ISO 8601 date string (ops: eq, ne, gt, gte, lt, lte, between, notBetween, in, notIn, isNull, isNotNull)
+- updatedAt: last update timestamp ISO 8601 date string (ops: eq, ne, gt, gte, lt, lte, between, notBetween, in, notIn, isNull, isNotNull)
 
 FilterDSL schema:
 {
@@ -180,7 +185,7 @@ function parseAndValidateFilterResponse(text: string): FilterDSL | null {
 
   const jsonText = extractFirstJsonObject(trimmed);
   if (!jsonText) {
-    throw new Error(`Filter parser returned non-JSON response: ${trimmed.slice(0, 80)}`);
+    throw new Error("Filter parser returned non-JSON response");
   }
 
   const parsed = JSON.parse(jsonText) as unknown;
@@ -281,6 +286,7 @@ async function callLlm(query: string): Promise<FilterDSL | null> {
           model,
           messages: [{ role: "user", content: prompt }],
           temperature: 0,
+          response_format: { type: "json_object" },
         }),
         signal: controller.signal,
       });
@@ -376,7 +382,7 @@ export async function extractStructuredFilter(
         event: "filter_parser",
         status: "error",
         strategy: request.strategy,
-        reason: err instanceof Error ? err.message : "unknown",
+        errorType: err instanceof Error ? err.name : "unknown",
         latencyMs,
       }),
     );

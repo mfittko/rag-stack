@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { query, countQueryTerms, getAutoMinScore } from "./query.js";
 import type { QueryRequest } from "./query.js";
 
@@ -54,9 +54,11 @@ vi.mock("./query-router.js", () => ({
 }));
 
 // Mock query-filter-parser so existing tests are not affected by filter
-// extraction. Integration tests override this mock per-test.
+// extraction. Integration tests set ROUTER_FILTER_LLM_ENABLED=true in beforeEach
+// to enable extractor invocation.
 vi.mock("./query-filter-parser.js", () => ({
   extractStructuredFilter: vi.fn(async () => null),
+  isFilterLlmEnabled: vi.fn(() => process.env.ROUTER_FILTER_LLM_ENABLED === "true"),
 }));
 
 describe("countQueryTerms", () => {
@@ -391,6 +393,11 @@ describe("query service", () => {
 describe("query service — LLM filter extraction integration", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    process.env.ROUTER_FILTER_LLM_ENABLED = "true";
+  });
+
+  afterEach(() => {
+    delete process.env.ROUTER_FILTER_LLM_ENABLED;
   });
 
   it("does NOT call filter extractor when explicit filter is provided", async () => {
