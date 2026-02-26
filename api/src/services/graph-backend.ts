@@ -93,7 +93,15 @@ export interface GraphResult {
 export interface GraphBackend {
   resolveEntities(names: string[]): Promise<ResolvedEntity[]>;
   traverse(seedIds: string[], params: TraversalParams): Promise<TraversalResult>;
-  getEntityDocuments(entityIds: string[], limit: number): Promise<EntityDocument[]>;
+  /**
+   * Fetch document associations for the given entity IDs.
+   *
+   * @param entityIds - Entity UUIDs to look up.
+   * @param limit     - Maximum number of rows to return.
+   * @param collection - Optional collection name; when provided, restricts results
+   *                     to documents belonging to that collection only.
+   */
+  getEntityDocuments(entityIds: string[], limit: number, collection?: string): Promise<EntityDocument[]>;
   getEntity(name: string): Promise<ResolvedEntity | null>;
   getEntityRelationships(entityId: string, limit: number): Promise<EntityRelationship[]>;
 }

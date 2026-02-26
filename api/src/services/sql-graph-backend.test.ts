@@ -253,6 +253,24 @@ describe("SqlGraphBackend.getEntityDocuments", () => {
     expect(result[0].entityName).toBe("AuthService");
     expect(result[0].mentionCount).toBe(3);
   });
+
+  it("passes collection filter as $3 param when collection is provided", async () => {
+    const pool = makePool([{ rows: [] }]);
+    const backend = new SqlGraphBackend(pool as any);
+    await backend.getEntityDocuments(["entity-uuid-1"], 10, "my-collection");
+    const [sql, params] = (pool as any).query.mock.calls[0] as [string, unknown[]];
+    expect(sql).toContain("AND d.collection = $3");
+    expect(params[2]).toBe("my-collection");
+  });
+
+  it("omits collection filter when collection is not provided", async () => {
+    const pool = makePool([{ rows: [] }]);
+    const backend = new SqlGraphBackend(pool as any);
+    await backend.getEntityDocuments(["entity-uuid-1"], 10);
+    const [sql, params] = (pool as any).query.mock.calls[0] as [string, unknown[]];
+    expect(sql).not.toContain("d.collection");
+    expect(params).toHaveLength(2);
+  });
 });
 
 describe("SqlGraphBackend.traverse", () => {

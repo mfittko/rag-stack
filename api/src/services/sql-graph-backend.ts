@@ -422,8 +422,14 @@ export class SqlGraphBackend implements GraphBackend {
     }
   }
 
-  async getEntityDocuments(entityIds: string[], limit: number): Promise<EntityDocument[]> {
+  async getEntityDocuments(entityIds: string[], limit: number, collection?: string): Promise<EntityDocument[]> {
     if (entityIds.length === 0) return [];
+
+    const hasCollection = collection !== undefined;
+    const collectionFilter = hasCollection ? ` AND d.collection = $3` : "";
+    const params: unknown[] = hasCollection
+      ? [entityIds, limit, collection]
+      : [entityIds, limit];
 
     const result = await this.pool.query<{
       document_id: string;
@@ -435,9 +441,9 @@ export class SqlGraphBackend implements GraphBackend {
        FROM document_entity_mentions dem
        JOIN documents d ON dem.document_id = d.id
        JOIN entities e ON dem.entity_id = e.id
-       WHERE dem.entity_id = ANY($1::uuid[])
+       WHERE dem.entity_id = ANY($1::uuid[])${collectionFilter}
        LIMIT $2`,
-      [entityIds, limit],
+      params,
     );
 
     return result.rows.map((r) => ({

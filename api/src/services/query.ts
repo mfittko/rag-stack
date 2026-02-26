@@ -8,6 +8,7 @@ import { SqlGraphBackend } from "./sql-graph-backend.js";
 import { classifyQuery } from "./query-router.js";
 import type { RoutingResult, QueryStrategy } from "./query-router.js";
 import { queryMetadata } from "./query-metadata.js";
+import { hybridMetadataFlow, hybridGraphFlow } from "./hybrid-strategy.js";
 
 export type { GraphParams, RoutingResult, QueryStrategy };
 
@@ -89,10 +90,37 @@ export async function query(
     throw new Error("Query text is required for semantic, graph, and hybrid strategies");
   }
 
-  // Hybrid stub — falls back to semantic until #110 lands
-  // TODO(#110): implement hybrid result merging
+  // Hybrid path: metadata → semantic rerank (filter present, no graphExpand)
+  // or graph → semantic rerank (graphExpand, explicit graph params, or no filter).
+  // Flow discriminator: if a filter is present AND no graph expansion is requested,
+  // use Flow 1 (metadata candidates → semantic rerank). Otherwise use Flow 2
+  // (graph traversal → semantic rerank), which also handles the router's
+  // `relational_pattern` rule that emits `hybrid` with no filter or graphExpand.
   if (routing.strategy === "hybrid") {
-    // fall through to semantic
+    const topK = request.topK ?? 8;
+    const minScore = request.minScore ?? getAutoMinScore(queryText);
+    const hasFilter = request.filter !== undefined && request.filter !== null;
+    const hasGraphExpand = (request.graphExpand === true) || (request.graph !== undefined);
+
+    if (hasGraphExpand || !hasFilter) {
+      // Flow 2: graph → semantic rerank
+      const backend = new SqlGraphBackend(getPool());
+      const hybridResult = await hybridGraphFlow(
+        { collection: col, query: queryText, topK, minScore, graph: request.graph },
+        backend,
+      );
+      return { ...hybridResult, routing };
+    } else {
+      // Flow 1: metadata → semantic rerank (filter is present, no graph expansion)
+      const hybridResult = await hybridMetadataFlow({
+        collection: col,
+        query: queryText,
+        topK,
+        minScore,
+        filter: request.filter,
+      });
+      return { ...hybridResult, routing };
+    }
   }
 
   const vectors = await embedTexts([queryText]);
